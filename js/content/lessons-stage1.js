@@ -133,7 +133,10 @@
         'My brother = he (ол). Сондықтан етістікке -s қосылады: plays.', { sentence: 'My brother ___ football every Saturday.' }),
       T('Жақшадағы етістікті дұрыс түрде жазыңыз:', ['likes'],
         'She — ол, сондықтан like → likes.', { sentence: 'She ___ (like) tea.' }),
-      T('Қатені түзетіп, сөйлемді толық жазыңыз:', ['mom works in a hospital'],
+      T('Қатені түзетіп, сөйлемді толық жазыңыз:', [
+        'mom works in a hospital', 'mom works at a hospital',
+        'mum works in a hospital', 'mum works at a hospital'
+      ],
         'Mom = she. Сондықтан work → works: Mom works in a hospital.', { sentence: 'Mom work in a hospital.' })
     ],
     contexts: {

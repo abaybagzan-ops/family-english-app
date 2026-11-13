@@ -174,7 +174,10 @@
         'We сөзімен were қолданылады. Созылып жатқан әрекет — were having.', { sentence: 'We ___ dinner when Grandpa called.' }),
       T('Бос орынды толтырыңыз (екі сөз):', ['was sleeping'],
         'Ару ұйықтап жатқан (фон), оятқыш шырылдады (оқиға): was sleeping.', { sentence: 'Aru ___ (sleep) when the alarm rang.' }),
-      T('Қатені түзетіп, сөйлемді толық жазыңыз:', ['i was walking to school when i saw a fox'],
+      T('Қатені түзетіп, сөйлемді толық жазыңыз:', [
+        'i was walking to school when i saw a fox',
+        'when i saw a fox i was walking to school'
+      ],
         'was сөзінен кейін етістік -ing түрінде болады: was walking.', { sentence: 'I was walk to school when I saw a fox.' }),
       C('Қай сөйлемде кенет оқиға дұрыс берілген?', [
         'She was writing an email when the computer stopped.',

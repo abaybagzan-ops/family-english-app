@@ -180,7 +180,16 @@
         'Одан кейін толық сөйлем тұр (she was tired) — although.', { sentence: '___ she was tired, she finished the book.' }),
       T('Қатені түзетіп, сөйлемді толық жазыңыз:', [
         'although the bus comes once an hour many people use it',
-        'despite the fact that the bus comes once an hour many people use it'
+        'even though the bus comes once an hour many people use it',
+        'though the bus comes once an hour many people use it',
+        'despite the fact that the bus comes once an hour many people use it',
+        'in spite of the fact that the bus comes once an hour many people use it',
+        'despite the bus coming once an hour many people use it',
+        'in spite of the bus coming once an hour many people use it',
+        'many people use it although the bus comes once an hour',
+        'many people use it even though the bus comes once an hour',
+        'many people use it despite the fact that the bus comes once an hour',
+        'many people use it despite the bus coming once an hour'
       ], 'despite сөзінен кейін «the bus comes» сияқты толық сөйлем тұра алмайды. although қолданыңыз немесе despite the fact that деп жазыңыз.',
         { sentence: 'Despite the bus comes once an hour, many people use it.' }),
       C('Қай сөйлем дұрыс?', [

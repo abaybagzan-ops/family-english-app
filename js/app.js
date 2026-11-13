@@ -167,14 +167,28 @@
     var input = h('input', { class: 'text-input', type: 'text', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', lang: 'en', 'aria-label': 'Жауабыңыз', placeholder: 'Жауапты жазыңыз…' });
     var check = h('button', { class: 'btn btn-primary', disabled: true }, 'Тексеру');
     var dk = h('button', { class: 'btn btn-ghost' }, 'Білмеймін');
+    var layoutHint = h('p', { class: 'type-hint hidden', role: 'status' }, 'Ағылшын әріптерімен жазыңыз');
     function submit() {
       if (!input.value.trim()) return;
+      // Кириллица в английском ответе — это раскладка, а не ошибка: подсказка и новая попытка
+      if (E.hasCyrillic(input.value)) {
+        layoutHint.classList.remove('hidden');
+        input.classList.add('is-hint');
+        input.focus();
+        return;
+      }
+      layoutHint.classList.add('hidden');
+      input.classList.remove('is-hint');
       var ok = E.checkTyped(task, input.value);
       input.disabled = true; check.disabled = true; dk.disabled = true;
       input.classList.add(ok ? 'is-correct' : 'is-wrong');
       finish(ok, input.value, task.answers[0]);
     }
-    input.addEventListener('input', function () { check.disabled = !input.value.trim(); });
+    input.addEventListener('input', function () {
+      check.disabled = !input.value.trim();
+      layoutHint.classList.add('hidden');
+      input.classList.remove('is-hint');
+    });
     input.addEventListener('keydown', function (e) { if (e.key === 'Enter') submit(); });
     check.addEventListener('click', submit);
     dk.addEventListener('click', function () {
@@ -182,7 +196,7 @@
       finish(false, '(білмеймін)', task.answers[0]);
     });
     setTimeout(function () { input.focus(); }, 30);
-    return h('div', { class: 'type-row' }, input, h('div', { class: 'row-gap' }, check, dk));
+    return h('div', { class: 'type-row' }, input, layoutHint, h('div', { class: 'row-gap' }, check, dk));
   }
 
   function orderBody(task, finish) {

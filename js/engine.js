@@ -67,6 +67,11 @@ FEA.engine = (function () {
     return w.slice().reverse();
   }
 
+  /* Есть ли в ответе кириллица (русская или казахская раскладка). */
+  function hasCyrillic(value) {
+    return /[\u0400-\u04FF]/.test(String(value || ''));
+  }
+
   function checkTyped(task, value) {
     var v = normalize(value);
     if (!v) return false;
@@ -259,6 +264,7 @@ FEA.engine = (function () {
     shuffledOptions: shuffledOptions,
     shuffledWords: shuffledWords,
     shuffle: shuffle,
+    hasCyrillic: hasCyrillic,
     checkTyped: checkTyped,
     checkOrder: checkOrder,
     contextKeyFor: contextKeyFor,

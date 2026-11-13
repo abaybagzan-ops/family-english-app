@@ -61,14 +61,14 @@ FEA.diagnostic = [
     id: 'd-w5', skill: 'words',
     prompt: 'Бос орынға қай сөз келеді?',
     sentence: 'The new rule was ___ by most residents; few people complained.',
-    options: ['welcomed', 'greeted', 'hosted'],
+    options: ['welcomed', 'invited', 'hosted'],
     answer: 0,
-    explain: 'welcome a rule — ережені жақсы қабылдау. greet — адамды қарсы алып амандасу, host — қонақ күту.',
+    explain: 'welcome a rule — ережені жақсы қабылдау. invite — адамды шақыру, host — қонақ күту немесе іс-шара өткізу. Ережені шақыруға не күтуге болмайды.',
     review: {
       type: 'choice', prompt: 'Бос орынға қай сөз келеді?',
       sentence: 'The idea was warmly ___ by the parents.',
-      options: ['welcomed', 'hosted', 'greeted'], answer: 0,
-      explain: 'Идеяны жақсы қабылдау — welcome an idea.'
+      options: ['welcomed', 'hosted', 'invited'], answer: 0,
+      explain: 'Идеяны жақсы қабылдау — welcome an idea. invite мен host адамға немесе іс-шараға қатысты айтылады.'
     }
   },
 

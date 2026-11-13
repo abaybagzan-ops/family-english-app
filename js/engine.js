@@ -34,9 +34,12 @@ FEA.engine = (function () {
 
   // ---------- Утилиты
   function normalize(s) {
-    return String(s || '')
+    var str = String(s || '');
+    if (str.normalize) str = str.normalize('NFKC');
+    return str
+      .replace(/[\u200B-\u200D\u2060\uFEFF]/g, '')   // невидимые символы клавиатур
       .toLowerCase()
-      .replace(/[’‘`´]/g, "'")
+      .replace(/[’‘`´ʼʹ′‛]/g, "'")
       .replace(/[.,!?;:"«»()—–\-]/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
@@ -72,10 +75,53 @@ FEA.engine = (function () {
     return /[\u0400-\u04FF]/.test(String(value || ''));
   }
 
+  /*
+   * Все допустимые формы ответа:
+   *  - ответы из данных урока;
+   *  - всё предложение целиком, если в задании есть пропуск ___ (подсказка в скобках убирается);
+   *  - «to + глагол» для однословного ответа без предложения (to go = go).
+   */
+  function acceptedForms(task) {
+    var forms = task.answers.slice();
+    if (task.sentence && task.sentence.indexOf('___') !== -1) {
+      var base = task.sentence.replace(/\s*\([^)]*\)/g, '');
+      task.answers.forEach(function (a) { forms.push(base.replace(/_{2,}/, a)); });
+    } else if (!task.sentence) {
+      task.answers.forEach(function (a) { if (a.indexOf(' ') === -1) forms.push('to ' + a); });
+    }
+    return forms.map(normalize);
+  }
+
   function checkTyped(task, value) {
     var v = normalize(value);
     if (!v) return false;
-    return task.answers.some(function (a) { return normalize(a) === v; });
+    return acceptedForms(task).indexOf(v) !== -1;
+  }
+
+  function editDistance(a, b) {
+    var prev = [], cur, i, j;
+    for (j = 0; j <= b.length; j++) prev[j] = j;
+    for (i = 1; i <= a.length; i++) {
+      cur = [i];
+      for (j = 1; j <= b.length; j++) {
+        cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      }
+      prev = cur;
+    }
+    return prev[b.length];
+  }
+
+  /*
+   * Опечатка в одну букву — только в заданиях на перевод слова («Ағылшынша жазыңыз…»).
+   * В грамматике не применяется: там одна буква (-s, -ed) и есть проверяемое правило.
+   */
+  function isNearMiss(task, value) {
+    if (!/^Ағылшынша жазыңыз/.test(task.prompt || '')) return false;
+    var v = normalize(value);
+    return task.answers.some(function (a) {
+      var n = normalize(a);
+      return n.length >= 4 && editDistance(v, n) === 1;
+    });
   }
 
   function checkOrder(task, tokens) {
@@ -266,6 +312,7 @@ FEA.engine = (function () {
     shuffle: shuffle,
     hasCyrillic: hasCyrillic,
     checkTyped: checkTyped,
+    isNearMiss: isNearMiss,
     checkOrder: checkOrder,
     contextKeyFor: contextKeyFor,
     lessonWords: lessonWords,

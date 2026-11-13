@@ -164,22 +164,30 @@
   }
 
   function typeBody(task, finish) {
-    var input = h('input', { class: 'text-input', type: 'text', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', lang: 'en', 'aria-label': 'Жауабыңыз', placeholder: 'Жауапты жазыңыз…' });
+    var input = h('input', { class: 'text-input', type: 'text', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', lang: 'en', 'aria-label': 'Жауабыңыз', placeholder: task.sentence && task.sentence.indexOf('___') !== -1 ? 'Бос орынға келетін сөзді жазыңыз…' : 'Жауапты жазыңыз…' });
     var check = h('button', { class: 'btn btn-primary', disabled: true }, 'Тексеру');
     var dk = h('button', { class: 'btn btn-ghost' }, 'Білмеймін');
     var layoutHint = h('p', { class: 'type-hint hidden', role: 'status' }, 'Ағылшын әріптерімен жазыңыз');
+    var nearMissUsed = false;
+    function showHint(text) {
+      layoutHint.textContent = text;
+      layoutHint.classList.remove('hidden');
+      input.classList.add('is-hint');
+      input.focus();
+    }
     function submit() {
       if (!input.value.trim()) return;
       // Кириллица в английском ответе — это раскладка, а не ошибка: подсказка и новая попытка
-      if (E.hasCyrillic(input.value)) {
-        layoutHint.classList.remove('hidden');
-        input.classList.add('is-hint');
-        input.focus();
+      if (E.hasCyrillic(input.value)) { showHint('Ағылшын әріптерімен жазыңыз'); return; }
+      var ok = E.checkTyped(task, input.value);
+      // Опечатка в одну букву в слове: одна дополнительная попытка, без записи ошибки
+      if (!ok && !nearMissUsed && E.isNearMiss(task, input.value)) {
+        nearMissUsed = true;
+        showHint('Дұрысқа жақын. Жазылуын тексеріп, қайта жазыңыз.');
         return;
       }
       layoutHint.classList.add('hidden');
       input.classList.remove('is-hint');
-      var ok = E.checkTyped(task, input.value);
       input.disabled = true; check.disabled = true; dk.disabled = true;
       input.classList.add(ok ? 'is-correct' : 'is-wrong');
       finish(ok, input.value, task.answers[0]);

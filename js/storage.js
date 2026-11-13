@@ -51,8 +51,9 @@ FEA.storage = (function () {
       id: newId(),
       name: name,
       presetLevel: presetLevel || null, // предварительный ориентир (A0, A1, A2, B1–B2)
-      interest: null,
+      interest: null,            // старое поле (версия 1): читается для совместимости
       otherTopic: '',
+      interests: null,           // версия 2: null — ещё не выбирал, [] — без интересов, иначе до 3 направлений
       createdAt: new Date().toISOString(),
       diagnostic: null,          // { date, correct: {words, grammar, reading}, suggested: {...} }
       stages: presetLevel ? FEA.stagesFromLevel(presetLevel) : null, // меняет только ученик
@@ -81,6 +82,7 @@ FEA.storage = (function () {
     if (!isObj(p.lessons) || !isObj(p.reviews)) return '«' + p.name + '» — сабақтар не қайталаулар табылмады';
     if (p.mistakes !== undefined && !Array.isArray(p.mistakes)) return '«' + p.name + '» — қателер тізімі қате';
     if (p.stages !== null && p.stages !== undefined && !isObj(p.stages)) return '«' + p.name + '» — саты қате';
+    if (p.interests !== null && p.interests !== undefined && !Array.isArray(p.interests)) return '«' + p.name + '» — қызығушылықтар тізімі қате';
     return null;
   }
 

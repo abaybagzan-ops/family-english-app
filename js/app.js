@@ -16,7 +16,16 @@
   function now() { return Date.now(); }
   function skillMeta(id) { return FEA.skills.filter(function (s) { return s.id === id; })[0]; }
   function stageMeta(id) { return FEA.stages[id]; }
-  function interestMeta(id) { return FEA.interests.filter(function (i) { return i.id === id; })[0]; }
+  /* Короткое описание выбранных направлений: «Тергеу және жұмбақтар, Музыка…» или null. */
+  function interestsSummary(p) {
+    var list = E.profileInterests(p);
+    if (list === null) return null;
+    if (!list.length) return 'Қызығушылық таңдалмаған — жалпы нұсқалар';
+    return list.map(function (it) {
+      if (it.id === 'custom') return 'Өз тақырыбым' + (it.custom ? ' «' + it.custom + '»' : '');
+      return E.directionMeta(it.id).title;
+    }).join(', ');
+  }
 
   function go(name, params) {
     route = { name: name, params: params || {} };
@@ -27,42 +36,83 @@
   function startRoute() {
     var p = profile();
     if (!p) return Object.keys(state.profiles).length ? 'profiles' : 'welcome';
-    if (!p.interest) return 'interest';
+    if (!E.hasInterestChoice(p)) return 'interest';
     if (!p.stages || !p.diagnostic) return 'diagIntro';
     return 'home';
   }
 
   // ------------------------------------------------------------ общие элементы
+  /*
+   * Собственная графика: монограмма-лупа и линейные иконки (шаг линии 1.75, currentColor).
+   * Эмодзи в интерфейсе не используются; они остаются только в учебном контенте, где помогают понять слово.
+   */
   var LOGO_SVG =
-    '<svg viewBox="0 0 120 80" aria-hidden="true" focusable="false">' +
-    '<circle cx="92" cy="22" r="14" fill="var(--sun)"/>' +
-    '<path d="M10 64 Q40 30 70 64 Z" fill="var(--hill1)"/>' +
-    '<path d="M44 66 Q78 36 112 66 Z" fill="var(--hill2)"/>' +
-    '<rect x="30" y="48" width="44" height="26" rx="4" fill="var(--card)" stroke="var(--accent)" stroke-width="2.5"/>' +
-    '<path d="M52 50 V72" stroke="var(--accent)" stroke-width="2.5"/>' +
-    '<path d="M36 56 H48 M36 62 H48 M56 56 H68 M56 62 H68" stroke="var(--muted)" stroke-width="2" stroke-linecap="round"/>' +
+    '<svg viewBox="0 0 40 40" aria-hidden="true" focusable="false">' +
+    '<circle cx="17" cy="17" r="12.5" fill="none" stroke="currentColor" stroke-width="2.4"/>' +
+    '<path d="M26.2 26.2 L35 35" stroke="var(--brass)" stroke-width="3.4" stroke-linecap="round"/>' +
+    '<text x="17" y="22" text-anchor="middle" font-family="Georgia, \'Times New Roman\', serif" font-size="14" font-weight="700" fill="currentColor">Aa</text>' +
     '</svg>';
 
-  function topbar() {
+  var ICONS = {
+    home: '<path d="M4 11.5 12 5l8 6.5V20a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1z"/>',
+    skills: '<path d="M5 5h6v6H5zM13 5h6v6h-6zM5 13h6v6H5zM13 13h6v6h-6z"/>',
+    progress: '<path d="M4 20h16M7 16v-4M12 16V8M17 16v-7"/>',
+    user: '<circle cx="12" cy="8.5" r="3.5"/><path d="M5 20c1.2-3.6 4-5.5 7-5.5s5.8 1.9 7 5.5"/>',
+    clock: '<circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3 2"/>',
+    arrow: '<path d="M5 12h13M13 7l5 5-5 5"/>',
+    check: '<path d="M5 12.5 10 17l9-10"/>',
+    close: '<path d="M6 6l12 12M18 6 6 18"/>',
+    hint: '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1 2V16h5.2v-.2c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/>',
+    review: '<path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v4h-4"/>',
+    save: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
+    upload: '<path d="M12 20V9M7 14l5-5 5 5M5 4h14"/>',
+    doc: '<path d="M7 3h7l4 4v14H7zM14 3v4h4M10 12h5M10 16h5"/>',
+    words: '<path d="M4 18 8.5 6 13 18M5.6 14h5.8M15 18v-6.5M15 12.5c0-1.4 1-2.5 2.5-2.5S20 11 20 12.5V18"/>',
+    grammar: '<path d="M8 5H5v14h3M16 5h3v14h-3M10 12h4"/>',
+    reading: '<path d="M3 6c3-1.5 6-1.5 9 0v13c-3-1.5-6-1.5-9 0zM21 6c-3-1.5-6-1.5-9 0v13c3-1.5 6-1.5 9 0z"/>',
+    pin: '<path d="M12 21s-6-6.2-6-11a6 6 0 0 1 12 0c0 4.8-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/>'
+  };
+  function icon(name, cls) {
+    return h('span', { class: 'ico' + (cls ? ' ' + cls : ''), 'aria-hidden': 'true',
+      html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" focusable="false">' + ICONS[name] + '</svg>' });
+  }
+
+  /* Иллюстрация к делу: багажная бирка (оригинальный рисунок). */
+  var TAG_SVG =
+    '<svg viewBox="0 0 120 150" aria-hidden="true" focusable="false">' +
+    '<path d="M60 4 C60 20 74 22 74 34" fill="none" stroke="var(--rule-strong)" stroke-width="2" stroke-dasharray="3 4"/>' +
+    '<path d="M30 40 L60 24 L90 40 V136 a6 6 0 0 1-6 6 H36 a6 6 0 0 1-6-6 Z" fill="var(--sheet)" stroke="currentColor" stroke-width="2.2"/>' +
+    '<circle cx="60" cy="42" r="5.5" fill="none" stroke="currentColor" stroke-width="2.2"/>' +
+    '<rect x="40" y="58" width="40" height="5" rx="1" fill="var(--brass)"/>' +
+    '<path d="M40 74 H80 M40 84 H70" stroke="var(--rule-strong)" stroke-width="2.2" stroke-linecap="round"/>' +
+    '<text x="60" y="112" text-anchor="middle" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="15" font-weight="700" fill="currentColor">4721</text>' +
+    '<path d="M40 122 H80" stroke="currentColor" stroke-width="1.2" stroke-dasharray="2 3"/>' +
+    '</svg>';
+
+  var NAV = [['home', 'Басты бет'], ['skills', 'Дағдылар'], ['progress', 'Прогресс']];
+
+  function topbar(active) {
     var p = profile();
     return h('header', { class: 'topbar' },
-      h('div', { class: 'brand' }, h('span', { class: 'brand-mark', html: LOGO_SVG }), h('span', null, 'Отбасылық ағылшын')),
-      p ? h('button', { class: 'chip chip-profile', onclick: function () {
-        // Пока настройка профиля не закончена, кнопка ведёт к списку профилей (можно выбрать другой)
-        go(p.interest && p.stages && p.diagnostic ? 'progress' : 'profiles');
-      }, 'aria-label': 'Профиль және баптаулар' }, '👤 ' + p.name) : null
-    );
+      h('div', { class: 'topbar-inner' },
+        h('div', { class: 'brand' }, h('span', { class: 'brand-mark', html: LOGO_SVG }),
+          h('span', { class: 'brand-text' }, h('span', { class: 'brand-name' }, 'Отбасылық ағылшын'), h('span', { class: 'brand-sub' }, 'тергеу бюросы'))),
+        active ? h('nav', { class: 'top-nav', 'aria-label': 'Негізгі мәзір' }, NAV.map(function (n) {
+          return h('button', { class: 'top-nav-item' + (active === n[0] ? ' active' : ''), 'aria-current': active === n[0] ? 'page' : null, onclick: function () { go(n[0]); } }, n[1]);
+        })) : null,
+        p ? h('button', { class: 'chip-profile', onclick: function () {
+          // Пока настройка профиля не закончена, кнопка ведёт к списку профилей (можно выбрать другой)
+          go(E.hasInterestChoice(p) && p.stages && p.diagnostic ? 'progress' : 'profiles');
+        }, 'aria-label': 'Профиль: ' + p.name + '. Профиль және баптаулар' },
+          h('span', { class: 'chip-initial', 'aria-hidden': 'true' }, String(p.name).trim().charAt(0).toUpperCase()),
+          h('span', { class: 'chip-name' }, p.name)) : null));
   }
 
   function bottomNav(active) {
-    function item(name, icon, label) {
-      return h('button', { class: 'nav-item' + (active === name ? ' active' : ''), onclick: function () { go(name); }, 'aria-current': active === name ? 'page' : null },
-        h('span', { class: 'nav-icon', 'aria-hidden': 'true' }, icon), h('span', null, label));
-    }
-    return h('nav', { class: 'bottom-nav', 'aria-label': 'Негізгі мәзір' },
-      item('home', '🏠', 'Басты бет'),
-      item('skills', '🧭', 'Дағдылар'),
-      item('progress', '📈', 'Прогресс'));
+    return h('nav', { class: 'bottom-nav', 'aria-label': 'Негізгі мәзір' }, NAV.map(function (n) {
+      return h('button', { class: 'nav-item' + (active === n[0] ? ' active' : ''), onclick: function () { go(n[0]); }, 'aria-current': active === n[0] ? 'page' : null },
+        icon(n[0], 'nav-icon'), h('span', null, n[1]));
+    }));
   }
 
   function storageBanner() {
@@ -72,7 +122,7 @@
   }
 
   function page(children, navActive) {
-    return [topbar(), storageBanner(), h('main', { class: 'page' }, children), navActive ? bottomNav(navActive) : null];
+    return [topbar(navActive), storageBanner(), h('main', { class: 'page' + (navActive ? ' page-' + navActive : '') }, children), navActive ? bottomNav(navActive) : null];
   }
 
   function stageLabel(stageId) {
@@ -132,7 +182,7 @@
     var ladder = opts.ladder ? buildLadder(task, opts) : null;
     var feedback = h('div', { class: 'feedback-slot', 'aria-live': 'polite' });
     var hintList = h('ol', { class: 'hint-ladder hidden', 'aria-live': 'polite' });
-    var hintBtn = ladder ? h('button', { class: 'btn btn-ghost btn-small hint-btn' }, '💡 Кеңес керек') : null;
+    var hintBtn = ladder ? h('button', { class: 'btn btn-ghost btn-small hint-btn' }, icon('hint'), 'Кеңес керек') : null;
     var retryNote = h('p', { class: 'retry-note hidden', role: 'status' });
     var nextBtn = h('button', { class: 'btn btn-primary btn-block hidden', onclick: function () { opts.onNext(); } }, opts.nextLabel || 'Келесі →');
     var api = { attempt: attempt, complete: complete, onScaffold: null };
@@ -154,10 +204,11 @@
       retryNote.classList.add('hidden');
       if (hintBtn) hintBtn.classList.add('hidden');
       opts.onResult(firstTryOk, answerText, { final: finalOk, attempts: attempts, hints: level });
-      var head = finalOk ? (firstTryOk ? '✓ Дұрыс!' : '✓ Дұрыс! Кеңеспен өзіңіз таптыңыз.') : '📘 Шешімін бірге қарайық';
+      var head = finalOk ? (firstTryOk ? '✓ Дұрыс!' : '✓ Дұрыс! Кеңеспен өзіңіз таптыңыз.') : 'Шешімін бірге қарайық';
       feedback.appendChild(h('div', { class: 'feedback ' + (finalOk ? 'feedback-ok' : 'feedback-solution') },
         h('div', { class: 'feedback-head' }, head),
         !finalOk && correctText ? h('div', { class: 'feedback-answer' }, 'Шешімі: ', h('strong', { lang: 'en' }, correctText)) : null,
+        task.outcomes && task.outcomes[task.answer] ? h('p', { class: 'feedback-outcome' }, h('strong', null, 'Нәтиже: '), task.outcomes[task.answer]) : null,
         task.explain ? h('p', { class: 'feedback-explain' }, task.explain) : null,
         !firstTryOk ? h('p', { class: 'feedback-note' }, finalOk ? 'Бұл тапсырма бекіту үшін кейін тағы бір рет шығады. Прогресс сақталды.' : (opts.wrongNote || 'Бұл тақырып кейін қайталауға қосылады. Прогресс сақталды.')) : null
       ));
@@ -173,7 +224,8 @@
       if (!ladder) { complete(false, false, answerText, correctText); return false; }
       if (level < ladder.length) {
         openHint();
-        retryNote.textContent = 'Әлі емес — бұл қалыпты. Кеңесті оқып, тағы бір рет байқап көріңіз.';
+        retryNote.textContent = (api.lastOutcome ? 'Салдары: ' + api.lastOutcome + ' ' : '') + 'Әлі емес — бұл қалыпты. Кеңесті оқып, тағы бір рет байқап көріңіз.';
+        api.lastOutcome = null;
         retryNote.classList.remove('hidden');
         return true;
       }
@@ -234,6 +286,8 @@
       b.addEventListener('click', function () {
         if (o.correct) { lockAll(); api.attempt(true, o.text, correctText); return; }
         b.classList.add('is-wrong'); b.disabled = true; b.setAttribute('aria-label', o.text + ' — сәйкес емес');
+        var oi = task.options.indexOf(o.text);
+        api.lastOutcome = task.outcomes && task.outcomes[oi] ? task.outcomes[oi] : null;
         if (!api.attempt(false, o.text, correctText)) lockAll();
       });
       buttons.push(b);
@@ -403,7 +457,7 @@
       glossary(text.glossary)
     ];
     if (compact) {
-      return h('details', { class: 'text-card compact', open: true }, h('summary', null, '📖 Мәтін'), inner);
+      return h('details', { class: 'text-card compact', open: true }, h('summary', null, 'Мәтін'), inner);
     }
     return h('div', { class: 'text-card' }, inner);
   }
@@ -414,7 +468,7 @@
     return page([
       h('section', { class: 'hero' },
         h('div', { class: 'hero-art', html: LOGO_SVG }),
-        h('h1', null, 'Сәлеметсіз бе! 👋'),
+        h('h1', null, 'Сәлеметсіз бе!'),
         h('p', { class: 'lead' }, 'Бұл — отбасыңызға арналған ағылшын тілі қосымшасы. Күніне 5–10 минут: сөздер, грамматика және қысқа мәтіндер.'),
         h('ul', { class: 'hero-list' },
           h('li', null, 'Әркім өз қарқынымен, өз құрылғысында оқиды.'),
@@ -538,53 +592,130 @@
     ]);
   }
 
+  /*
+   * Выбор интересов (до трёх направлений) и уточнение «что именно нравится».
+   * Порядок выбора = приоритет. Выбор можно сменить позже на странице «Прогресс».
+   * Пустой выбор допустим: тогда везде показывается общий вариант урока.
+   */
   function screenInterest() {
     var p = profile();
     var editing = route.params.edit;
-    var selected = p.interest || null;
-    var topic = p.otherTopic || '';
+    var max = FEA.maxDirections;
+    var sel = (E.profileInterests(p) || []).map(function (x) { return { id: x.id, likes: x.likes.slice(), custom: x.custom || '' }; });
     var cards = {};
-    var otherBox = h('div', { class: 'other-box' + (selected === 'other' ? '' : ' hidden') });
-    var topicInput = h('input', { class: 'text-input', type: 'text', maxlength: '40', placeholder: 'Өз тақырыбыңызды жазыңыз', value: topic, 'aria-label': 'Өз тақырыбыңыз' });
-    var next = h('button', { class: 'btn btn-primary btn-block', disabled: !selected }, editing ? 'Сақтау' : 'Жалғастыру');
+    var counter = h('p', { class: 'interest-counter', role: 'status' });
+    var details = h('div', { class: 'interest-details' });
+    var save = h('button', { class: 'btn btn-primary btn-block' }, editing ? 'Сақтау' : 'Жалғастыру');
 
-    otherBox.appendChild(h('div', { class: 'chips' }, FEA.otherTopics.map(function (t) {
-      return h('button', { class: 'chip', onclick: function () { topicInput.value = t; } }, t);
-    })));
-    otherBox.appendChild(topicInput);
-    otherBox.appendChild(h('p', { class: 'muted small' }, 'Өз тақырыбыңызға арналған мәтіндер автоматты түрде жасалмайды. Дайын мәтін болмаса, сабақта жалпы мәтін беріледі — бұл сабақтың басында көрсетіледі.'));
+    function find(id) { return sel.filter(function (x) { return x.id === id; })[0]; }
+    function meta(id) { return E.directionMeta(id); }
 
-    function pick(id) {
-      selected = id;
-      Object.keys(cards).forEach(function (k) { cards[k].classList.toggle('selected', k === id); cards[k].setAttribute('aria-pressed', k === id ? 'true' : 'false'); });
-      otherBox.classList.toggle('hidden', id !== 'other');
-      next.disabled = false;
+    function sync(msg) {
+      Object.keys(cards).forEach(function (id) {
+        var on = !!find(id);
+        var full = !on && sel.length >= max;
+        cards[id].classList.toggle('selected', on);
+        cards[id].classList.toggle('is-full', full);
+        cards[id].setAttribute('aria-pressed', on ? 'true' : 'false');
+        var no = cards[id].querySelector('.interest-order');
+        no.textContent = on ? String(sel.indexOf(find(id)) + 1) : '';
+      });
+      counter.textContent = msg || ('Таңдалды: ' + sel.length + ' / ' + max + (sel.length ? ' · бірінші таңдалғаны — басты бағыт' : ''));
+      save.disabled = !sel.length;
+      drawDetails();
     }
 
-    next.addEventListener('click', function () {
-      p.interest = selected;
-      p.otherTopic = selected === 'other' ? topicInput.value.trim().slice(0, 40) : '';
+    function toggle(id) {
+      var cur = find(id);
+      if (cur) sel.splice(sel.indexOf(cur), 1);
+      else if (sel.length >= max) { sync('Ең көбі ' + max + ' бағыт. Жаңасын қосу үшін біреуін алып тастаңыз.'); return; }
+      else sel.push({ id: id, likes: [], custom: '' });
+      sync();
+    }
+
+    function likeChip(item, value, title, limit) {
+      var on = item.likes.indexOf(value) !== -1;
+      return h('button', { class: 'chip' + (on ? ' chip-on' : ''), 'aria-pressed': on ? 'true' : 'false', onclick: function () {
+        var i = item.likes.indexOf(value);
+        if (i !== -1) item.likes.splice(i, 1);
+        else { if (limit && item.likes.length >= limit) item.likes.shift(); item.likes.push(value); }
+        drawDetails(this.textContent);
+      } }, title);
+    }
+
+    function drawDetails(focusText) {
+      details.innerHTML = '';
+      if (!sel.length) return;
+      details.appendChild(h('h2', { class: 'interest-details-title' }, 'Нақтырақ не ұнайды?'));
+      details.appendChild(h('p', { class: 'muted small' }, 'Міндетті емес. Бұл таңдау сабақта қай әрекет түрін бірінші ұсынатынын анықтайды.'));
+      sel.forEach(function (item, n) {
+        var d = meta(item.id);
+        var box = h('fieldset', { class: 'interest-detail' }, h('legend', null, (n + 1) + ' · ' + d.title));
+        if (item.id === 'custom') {
+          var input = h('input', { class: 'text-input', type: 'text', maxlength: '40', placeholder: 'Тақырыбыңызды жазыңыз', value: item.custom, 'aria-label': 'Өз тақырыбыңыз' });
+          input.addEventListener('input', function () { item.custom = input.value; });
+          box.appendChild(h('div', { class: 'chips' }, d.suggestions.map(function (t) {
+            return h('button', { class: 'chip', onclick: function () { input.value = t; item.custom = t; } }, t);
+          })));
+          box.appendChild(input);
+          box.appendChild(h('p', { class: 'small' }, 'Қандай әрекет ұнайды? (ең көбі екеуі)'));
+          box.appendChild(h('div', { class: 'chips' }, d.modeChoices.map(function (m) { return likeChip(item, m, FEA.actionModes[m].title, 2); })));
+          box.appendChild(h('p', { class: 'muted small' }, 'Өз тақырыбыңызға мәтін автоматты түрде жасалмайды. Әрекет түрін таңдасаңыз, сабақ сол әрекетпен беріледі, бірақ тақырыбы басқа болады — бұл сабақта жазылады.'));
+        } else {
+          box.appendChild(h('div', { class: 'chips' }, d.likes.map(function (l) { return likeChip(item, l.id, l.title); })));
+        }
+        details.appendChild(box);
+      });
+      if (focusText) {
+        var again = [].filter.call(details.querySelectorAll('.chip'), function (c) { return c.textContent === focusText; })[0];
+        if (again) again.focus();
+      }
+    }
+
+    function card(d) {
+      var c = h('button', { class: 'interest-card', 'aria-pressed': 'false', onclick: function () { toggle(d.id); } },
+        h('span', { class: 'interest-check', 'aria-hidden': 'true' }, h('span', { class: 'interest-order' })),
+        h('span', { class: 'interest-text' },
+          h('span', { class: 'interest-title' }, d.title),
+          h('span', { class: 'interest-desc' }, d.action)));
+      cards[d.id] = c;
+      return c;
+    }
+
+    save.addEventListener('click', function () {
+      if (!sel.length) return;
+      p.interests = sel.map(function (x) { return E.cleanInterest(x); }).filter(Boolean);
       persist();
       go(editing ? 'progress' : startRoute());
     });
+    var skip = h('button', { class: 'btn btn-ghost btn-block', onclick: function () {
+      p.interests = [];
+      persist();
+      go(editing ? 'progress' : startRoute());
+    } }, 'Әзірге таңдамаймын — жалпы нұсқалар');
 
-    return page([
-      h('section', { class: 'card card-pad' },
-        h('p', { class: 'step-label' }, editing ? 'Қызығушылық' : '2-қадам / 3'),
+    var groups = FEA.directionGroups.map(function (g) {
+      var list = FEA.directions.filter(function (d) { return d.group === g.id; });
+      return h('section', { class: 'interest-group', 'aria-label': g.title },
+        h('h2', { class: 'overline' }, g.title),
+        h('div', { class: 'interest-grid' }, list.map(function (d) { return card(d); })));
+    });
+    groups.push(h('section', { class: 'interest-group', 'aria-label': 'Басқа' },
+      h('h2', { class: 'overline' }, 'Тізімде жоқ па?'),
+      h('div', { class: 'interest-grid' }, card(FEA.customDirection))));
+
+    var view = page([
+      h('section', { class: 'card card-pad interest-screen' },
+        h('p', { class: 'step-label' }, editing ? 'Қызығушылықтар' : '2-қадам / 3'),
         h('h1', null, 'Сізге не қызық?'),
-        h('p', { class: 'muted' }, 'Қызығушылық мәтіндердің тақырыбын, мысалдарды және тақырыптық сөздердің бір бөлігін өзгертеді. Сабақтардың реті мен күрделілігі өзгермейді.'),
-        h('div', { class: 'interest-grid' }, FEA.interests.map(function (it) {
-          var c = h('button', { class: 'interest-card' + (selected === it.id ? ' selected' : ''), 'aria-pressed': selected === it.id ? 'true' : 'false', onclick: function () { pick(it.id); } },
-            h('span', { class: 'interest-icon', 'aria-hidden': 'true' }, it.icon),
-            h('span', { class: 'interest-text' }, h('span', null, it.title), it.desc ? h('span', { class: 'interest-desc' }, it.desc) : null));
-          cards[it.id] = c;
-          return c;
-        })),
-        otherBox,
-        next,
-        editing ? h('button', { class: 'btn btn-ghost btn-block', onclick: function () { go('progress'); } }, 'Артқа') : null
-      )
+        h('p', { class: 'lead' }, 'Таңдауыңыз сабақтағы рөліңізді, тапсырманы және шешім қабылдау тәсілін өзгертеді. 3 бағытқа дейін таңдаңыз.'),
+        h('p', { class: 'muted small' }, 'Деңгей, сабақтар реті және тіл мақсаты өзгермейді. Кейін «Прогресс» бетінде өзгертуге болады. Кейбір сабақтарда сіздің бағытыңызға нұсқа әлі жоқ — онда жалпы нұсқа беріледі және бұл ашық жазылады.'),
+        groups,
+        h('div', { class: 'interest-footer' }, counter, details, save, skip,
+          editing ? h('button', { class: 'btn btn-ghost btn-block', onclick: function () { go('progress'); } }, 'Артқа') : null))
     ]);
+    sync();
+    return view;
   }
 
   function screenProfiles() {
@@ -596,8 +727,8 @@
         ids.length ? h('div', { class: 'list' }, ids.map(function (id) {
           var p = state.profiles[id];
           return h('button', { class: 'list-item', onclick: function () { state.activeProfileId = id; persist(); go(startRoute()); } },
-            h('span', null, '👤 ' + p.name + (p.presetLevel ? ' · болжамды ' + p.presetLevel : '')),
-            h('span', { class: 'muted small' }, p.interest && interestMeta(p.interest) ? interestMeta(p.interest).title : 'баптау аяқталмаған'));
+            h('span', { class: 'list-name' }, h('span', { class: 'chip-initial small-initial', 'aria-hidden': 'true' }, String(p.name).trim().charAt(0).toUpperCase()), p.name + (p.presetLevel ? ' · болжамды ' + p.presetLevel : '')),
+            h('span', { class: 'muted small' }, interestsSummary(p) || 'баптау аяқталмаған'));
         })) : h('p', { class: 'empty' }, 'Әзірге профиль жоқ.'),
         h('button', { class: 'btn btn-primary btn-block', onclick: function () { go('name'); } }, '＋ Жаңа профиль немесе отбасы мүшесін таңдау')
       )
@@ -753,14 +884,14 @@
           var sm = skillMeta(s);
           var diff = sug && sug[s] !== p.stages[s];
           return h('div', { class: 'skill-result skill-' + s },
-            h('div', { class: 'skill-result-head' }, h('span', { class: 'skill-icon', 'aria-hidden': 'true' }, sm.icon), h('strong', null, sm.title),
+            h('div', { class: 'skill-result-head' }, h('span', { class: 'skill-icon' }, icon(s)), h('strong', null, sm.title),
               d && d.correct ? h('span', { class: 'muted small' }, d.correct[s] + ' / 5 дұрыс') : null),
             h('div', { class: 'muted small' }, 'Қазіргі саты:'),
             stageStepper(s, function () { render(); }),
             sug ? h('div', { class: 'suggest' + (diff ? ' diff' : '') },
               diff ? [h('span', null, 'Диагностика ұсынады: ', h('strong', null, stageLabel(sug[s])), ' (' + stageMeta(sug[s]).cefrHint + ')'),
                 h('button', { class: 'btn btn-secondary btn-small', onclick: function () { p.stages[s] = sug[s]; persist(); render(); } }, 'Қабылдау')]
-                : h('span', null, '✓ Диагностика қазіргі сатымен сәйкес келеді.')) : null);
+                : h('span', null, 'Диагностика қазіргі сатымен сәйкес келеді.')) : null);
         })),
         h('p', { class: 'muted small' }, FEA.cefrDisclaimer),
         h('p', { class: 'muted small' }, 'Тым жеңіл немесе тым қиын көрінсе, «Жеңілірек» не «Қиынырақ» батырмасымен өзіңіз таңдаңыз.'),
@@ -781,22 +912,48 @@
     var done = !!p.lessons[lesson.id];
     return h('div', { class: 'lesson-card skill-' + lesson.skill + (opts.big ? ' big' : '') },
       h('div', { class: 'lesson-card-head' },
-        h('span', { class: 'skill-badge' }, sm.icon + ' ' + sm.title),
-        h('span', { class: 'muted small' }, stageLabel(lesson.stage)),
-        done ? h('span', { class: 'done-badge' }, '✓ Өтілді') : null),
+        h('span', { class: 'skill-badge' }, icon(lesson.skill), sm.title),
+        h('span', { class: 'meta-sep', 'aria-hidden': 'true' }, '·'),
+        h('span', { class: 'meta' }, stageLabel(lesson.stage)),
+        done ? h('span', { class: 'done-badge' }, icon('check'), 'Өтілді') : null),
       h('h3', { class: 'lesson-title' }, lesson.title),
-      h('p', { class: 'muted' }, lesson.goal),
+      h('p', { class: 'lesson-goal' }, lesson.goal),
       themeLine(lesson, opts.ctxKey),
       h('div', { class: 'lesson-card-foot' },
-        h('span', { class: 'muted small' }, '⏱ 5–10 минут'),
+        h('span', { class: 'meta' }, icon('clock'), '5–10 минут'),
         h('button', { class: 'btn ' + (opts.big ? 'btn-primary' : 'btn-secondary'), onclick: function () { startLesson(lesson.id, opts.ctxKey); } },
           opts.label || (done ? 'Қайталау' : 'Бастау'))));
   }
 
+  /* Что выбрано для ученика и почему — честно, без обещаний, которых нет. */
+  function variantInfo(lesson, ctxKey) {
+    var p = profile();
+    if (ctxKey) {
+      var ctx = lesson.contexts[ctxKey];
+      return { key: ctxKey, ctx: ctx, kind: E.isActionVariant(ctx) ? 'chosen' : 'chosen-topic', interest: null };
+    }
+    return E.pickVariant(lesson, p);
+  }
+  function variantText(lesson, v) {
+    var mode = v.ctx && v.ctx.mode ? FEA.actionModes[v.ctx.mode] : null;
+    var it = v.interest;
+    var itName = it ? (it.id === 'custom' ? (it.custom ? '«' + it.custom + '»' : 'өз тақырыбыңыз') : '«' + E.directionMeta(it.id).title + '»') : '';
+    if (v.kind === 'action') return { cls: 'action', head: 'Рөліңіз: ' + v.ctx.role, sub: mode.does };
+    if (v.kind === 'chosen') return { cls: 'action', head: 'Рөліңіз: ' + v.ctx.role, sub: mode.does };
+    if (v.kind === 'mode') return { cls: 'action', head: 'Әрекет: ' + mode.title + ' · рөліңіз: ' + v.ctx.role,
+      sub: itName + ' бойынша бұл сабақта нұсқа жоқ. Сіз ұнататын әрекет түрі сақталды, бірақ тақырыбы басқа.' };
+    if (v.kind === 'topic' || v.kind === 'chosen-topic') return { cls: 'topic', head: 'Мәтін тақырыбы: ' + (FEA.contextNames[v.key] || v.key),
+      sub: 'Бұл сабақта тек мәтіннің тақырыбы ауысады, тапсырма түрі жалпы.' };
+    return { cls: 'neutral', head: 'Жалпы нұсқа',
+      sub: it ? itName + ' бойынша бұл сабақта дайын нұсқа әлі жоқ. Кездейсоқ сөз қоспаймыз — жалпы мәтін беріледі. Мақсат пен күрделілік өзгермейді.'
+        : 'Қызығушылық таңдалмаған — жалпы мәтін беріледі.' };
+  }
   function themeLine(lesson, ctxKey) {
-    var c = E.contextFor(lesson, ctxKey || E.contextKeyFor(profile()));
-    return h('p', { class: 'small theme-line' + (c.fallback ? ' fallback' : '') },
-      (c.fallback ? '📄 Жалпы мәтін: ' : '🎨 Сіздің тақырыбыңыз: ') + FEA.contextNames[c.key]);
+    var v = variantInfo(lesson, ctxKey);
+    var t = variantText(lesson, v);
+    // На карточке — коротко; полное объяснение показывается в уроке
+    if (v.kind === 'neutral') t.sub = v.interest ? 'Сіздің бағытыңызға бұл сабақта нұсқа әлі жоқ — жалпы мәтін.' : 'Қызығушылық таңдалмаған.';
+    return h('div', { class: 'theme-line variant-' + t.cls }, h('span', { class: 'theme-head' }, t.head), h('span', { class: 'theme-sub' }, t.sub));
   }
 
   function screenHome() {
@@ -808,7 +965,7 @@
     var main;
 
     if (rec.kind === 'lesson') {
-      main = h('section', null, h('h2', { class: 'section-title' }, 'Келесі ұсынылатын сабақ'), lessonCard(rec.lesson, { big: true, label: doneCount ? 'Жалғастыру' : 'Бастау' }));
+      main = h('section', { class: 'next-lesson' }, h('h2', { class: 'section-title' }, 'Келесі ұсынылатын сабақ'), lessonCard(rec.lesson, { big: true, label: doneCount ? 'Жалғастыру' : 'Бастау' }));
     } else if (rec.kind === 'review') {
       main = h('section', { class: 'card card-pad' },
         h('h2', null, 'Бүгін — қайталау күні'),
@@ -822,26 +979,34 @@
         h('h2', null, 'Жарайсыз! Ағымдағы сабақтар өтілді'),
         h('p', { class: 'muted' }, 'Бүгін қайталайтын сұрақ жоқ. Сабақты жаңа мәтінмен қайталауға немесе «Прогресс» бетінде келесі сатыны таңдауға болады.'),
         other && altCtx ? h('button', { class: 'btn btn-primary btn-block', onclick: function () { startLesson(other.id, altCtx); } },
-          '«' + other.title + '» — жаңа мәтінмен (' + FEA.contextNames[altCtx] + ')') : null,
+          '«' + other.title + '» — басқа нұсқамен (' + E.variantLabel(other, altCtx) + ')') : null,
         h('button', { class: 'btn btn-ghost btn-block', onclick: function () { go('progress'); } }, 'Прогресс және сатылар'));
     }
 
+    var solvedCases = (FEA.cases || []).filter(function (c) { var r = (p.cases || {})[c.id]; return r && r.solved && r.solved.length; }).length;
     return page([
       h('section', { class: 'greet' },
+        h('p', { class: 'overline' }, 'Бүгінгі жоспар'),
         h('h1', null, 'Сәлем, ' + p.name + '!'),
-        h('p', { class: 'muted' }, 'Бүгінгі мақсат — бір қысқа сабақ. Тұрақты аз-аздан оқу — ең тиімді жол.')),
-      caseHomeCard(p),
-      main,
-      due > 0 && rec.kind !== 'review' ? h('section', { class: 'card card-pad review-card' },
-        h('div', null, h('strong', null, '🔁 Қайталау: ' + due + ' сұрақ'),
-          h('p', { class: 'muted small' }, 'Бұрын үйренгенді ұмытпау үшін. Сабақтың басында да 1–2 сұрақ қосылады.')),
-        h('button', { class: 'btn btn-secondary', onclick: function () { startReview(); } }, 'Қайталау')) : null,
-      h('section', { class: 'card card-pad' },
-        h('div', { class: 'stats-row' },
-          h('div', null, h('div', { class: 'stat-num' }, String(doneCount)), h('div', { class: 'muted small' }, 'өтілген сабақ')),
-          h('div', null, h('div', { class: 'stat-num' }, String(Object.keys(p.reviews).length)), h('div', { class: 'muted small' }, 'қайталаудағы сұрақ'))),
-        h('p', { class: 'muted small' }, '💾 Прогресс осы құрылғыда, осы браузерде сақталады.')),
-      h('button', { class: 'btn btn-ghost btn-block', onclick: function () { go('skills'); } }, 'Дағдыны өзім таңдаймын →')
+        h('p', { class: 'lead' }, 'Бір қысқа сабақ — бүгінге жеткілікті. Тұрақты аз-аздан оқу ең тиімді.')),
+      h('div', { class: 'home-grid' },
+        h('div', { class: 'home-main' },
+          main,
+          caseHomeCard(p)),
+        h('aside', { class: 'home-aside', 'aria-label': 'Қысқаша прогресс' },
+          due > 0 && rec.kind !== 'review' ? h('section', { class: 'review-card' },
+            h('div', { class: 'review-text' }, h('p', { class: 'overline' }, 'Бүгін қайталау'),
+              h('p', { class: 'review-count' }, due + ' сұрақ'),
+              h('p', { class: 'small muted' }, 'Бұрын үйренгенді ұмытпау үшін. Сабақтың басында да 1–2 сұрақ қосылады.')),
+            h('button', { class: 'btn btn-secondary', onclick: function () { startReview(); } }, icon('review'), 'Қайталау')) : null,
+          h('section', { class: 'ledger' },
+            h('p', { class: 'overline' }, 'Тергеу журналы'),
+            h('dl', { class: 'ledger-list' },
+              h('div', { class: 'ledger-row' }, h('dt', null, 'Өтілген сабақ'), h('dd', { class: 'stat-num' }, String(doneCount))),
+              h('div', { class: 'ledger-row' }, h('dt', null, 'Қайталаудағы сұрақ'), h('dd', { class: 'stat-num' }, String(Object.keys(p.reviews).length))),
+              h('div', { class: 'ledger-row' }, h('dt', null, 'Шешілген іс'), h('dd', { class: 'stat-num' }, String(solvedCases)))),
+            h('button', { class: 'btn btn-ghost btn-block', onclick: function () { go('skills'); } }, 'Дағдыны өзім таңдаймын', icon('arrow')),
+            h('p', { class: 'fineprint' }, 'Прогресс осы құрылғыда, осы браузерде сақталады.'))))
     ], 'home');
   }
 
@@ -856,13 +1021,13 @@
         var sm = skillMeta(s);
         return h('section', { class: 'skill-section skill-' + s, id: 'skill-' + s },
           h('div', { class: 'skill-section-head' },
-            h('span', { class: 'skill-icon big', 'aria-hidden': 'true' }, sm.icon),
+            h('span', { class: 'skill-icon big' }, icon(s)),
             h('div', null, h('h2', null, sm.title), h('p', { class: 'muted small' }, sm.desc),
               h('p', { class: 'small' }, 'Сіздің сатыңыз: ', h('strong', null, stageLabel(p.stages[s])), ' (болжамды)'))),
           h('div', { class: 'lesson-list' }, E.lessonsForSkill(s).map(function (l) {
             var isCurrent = l.stage === p.stages[s];
             return h('div', { class: 'lesson-wrap' + (isCurrent ? ' current' : '') },
-              isCurrent ? h('div', { class: 'current-label' }, '★ Сіздің сатыңыз') : null,
+              isCurrent ? h('div', { class: 'current-label' }, 'Сіздің сатыңыз') : null,
               lessonCard(l));
           })));
       })
@@ -875,10 +1040,9 @@
   function startLesson(lessonId, ctxKey) {
     var p = profile();
     var lesson = E.getLesson(lessonId);
-    var wanted = ctxKey || E.contextKeyFor(p);
-    var c = E.contextFor(lesson, wanted);
-    run = { mode: 'lesson', lesson: lesson, ctxKey: c.key, ctxFallback: c.fallback, wantedCtx: wanted,
-      steps: E.buildLessonSteps(lesson, c.key, p, now()), i: 0, results: [], mistakes: [], newReviews: 0 };
+    var v = variantInfo(lesson, ctxKey);
+    run = { mode: 'lesson', lesson: lesson, ctxKey: v.key, variant: v,
+      steps: E.buildLessonSteps(lesson, v.key, p, now()), i: 0, results: [], mistakes: [], newReviews: 0 };
     go('lesson');
   }
 
@@ -955,12 +1119,15 @@
     else if (step.kind === 'story') content = storyView(step.story);
     else if (step.kind === 'intro') content = introView(run.lesson, run.ctxKey);
     else if (step.kind === 'text') content = h('section', null,
-      h('h2', { class: 'task-prompt' }, 'Мәтінді оқыңыз'),
-      h('p', { class: 'muted small' }, 'Алдымен негізгі ойды түсінуге тырысыңыз. Әр сөзді аудару міндетті емес.'),
+      h('h2', { class: 'task-prompt' }, (run.variant && run.variant.ctx && run.variant.ctx.textHeading) || 'Мәтінді оқыңыз'),
+      h('p', { class: 'muted small' }, run.variant && run.variant.ctx && run.variant.ctx.mode
+        ? 'Келесі қадамда осы мәліметке сүйеніп шешім қабылдайсыз. Әр сөзді аудару міндетті емес.'
+        : 'Алдымен негізгі ойды түсінуге тырысыңыз. Әр сөзді аудару міндетті емес.'),
       textCard(step.text, false),
       h('button', { class: 'btn btn-primary btn-block', onclick: nextStep }, 'Сұрақтарға көшу →'));
     else {
-      var phaseLabel = { warmup: '🔁 Алдымен еске түсірейік', review: '🔁 Қайталау', core: '✏️ Жаттығу', context: '📖 Мәтін бойынша' }[step.phase];
+      var phaseLabel = { warmup: 'Алдымен еске түсірейік', review: 'Қайталау', core: 'Жаттығу',
+        context: run.variant && run.variant.ctx && run.variant.ctx.role ? 'Сіздің шешіміңіз · ' + run.variant.ctx.role : 'Мәтін бойынша' }[step.phase];
       content = h('div', null,
         h('div', { class: 'phase-label' }, phaseLabel),
         taskView(step.task, {
@@ -978,7 +1145,7 @@
 
     return [
       h('header', { class: 'lesson-top' },
-        h('button', { class: 'icon-btn', 'aria-label': 'Сабақтан шығу', onclick: exitLesson }, '✕'),
+        h('button', { class: 'icon-btn', 'aria-label': 'Сабақтан шығу', onclick: exitLesson }, icon('close')),
         h('div', { class: 'lesson-top-mid' },
           h('div', { class: 'lesson-top-title' }, title),
           h('div', { class: 'progress', role: 'progressbar', 'aria-label': 'Сабақ барысы', 'aria-valuenow': String(progress), 'aria-valuemin': '0', 'aria-valuemax': '100' },
@@ -991,13 +1158,24 @@
 
   function missionView(lesson, ctxKey) {
     var m = E.missionFor(lesson, ctxKey);
+    var t = variantText(lesson, run.variant || variantInfo(lesson, ctxKey));
+    var others = E.lessonVariants(lesson).filter(function (x) { return x.key !== ctxKey; });
     return h('section', { class: 'mission' },
-      h('div', { class: 'mission-badge' }, '🎯 Миссия · ' + skillMeta(lesson.skill).title),
+      h('div', { class: 'mission-badge' }, 'Миссия · ' + skillMeta(lesson.skill).title),
       h('h2', { class: 'mission-title' }, m.title),
       h('p', { class: 'mission-scene' }, m.scene),
-      m.canDo ? h('div', { class: 'goal' }, h('span', { class: 'goal-label' }, 'Миссиядан кейін:'), h('p', null, m.canDo)) : null,
-      h('p', { class: 'muted small' }, 'Шамамен 5–10 минут. Қате болса — подсказка және тағы бір әрекет беріледі.'),
-      h('button', { class: 'btn btn-primary btn-block', onclick: nextStep }, 'Миссияны бастау →'));
+      h('div', { class: 'theme-line variant-' + t.cls }, h('span', { class: 'theme-head' }, t.head), h('span', { class: 'theme-sub' }, t.sub)),
+      m.canDo ? h('div', { class: 'goal' }, h('span', { class: 'goal-label' }, 'Тіл мақсаты — кез келген нұсқада бірдей:'), h('p', null, m.canDo)) : null,
+      h('p', { class: 'muted small' }, 'Шамамен 5–10 минут. Қате болса — кеңес және тағы бір әрекет беріледі.'),
+      h('button', { class: 'btn btn-primary btn-block', onclick: nextStep }, 'Миссияны бастау →'),
+      others.length ? h('details', { class: 'variant-picker' },
+        h('summary', null, 'Басқа рөлді немесе мәтінді таңдау'),
+        h('p', { class: 'muted small' }, 'Басқа нұсқа деңгейді өзгертпейді: тіл мақсаты мен негізгі жаттығулар сол күйі қалады.'),
+        h('div', { class: 'variant-list' }, others.map(function (x) {
+          return h('button', { class: 'btn btn-ghost variant-option', onclick: function () { startLesson(lesson.id, x.key); } },
+            h('span', null, E.variantLabel(lesson, x.key)),
+            x.action ? h('span', { class: 'variant-mode' }, FEA.actionModes[x.ctx.mode].title) : h('span', { class: 'variant-mode' }, 'тек мәтін'));
+        }))) : null);
   }
 
   /*
@@ -1020,7 +1198,7 @@
         b.addEventListener('click', function () {
           btns.forEach(function (x, j) { x.disabled = true; if (j === pz.answer) x.classList.add('is-correct'); });
           if (i !== pz.answer) b.classList.add('is-guess');
-          after.appendChild(h('p', { class: 'puzzle-verdict' }, i === pz.answer ? '✓ Жақсы болжам!' : '🔎 Бұл болжам дәл емес — бұл қалыпты. Дұрыс заңдылық белгіленді.'));
+          after.appendChild(h('p', { class: 'puzzle-verdict' }, i === pz.answer ? '✓ Жақсы болжам!' : 'Бұл болжам дәл емес — бұл қалыпты. Дұрыс заңдылық белгіленді.'));
           after.appendChild(h('p', null, pz.after));
           after.appendChild(h('button', { class: 'btn btn-primary btn-block', onclick: function () { this.disabled = true; ruleShown = true; draw(); } }, 'Ережені нақты көру →'));
           after.classList.remove('hidden');
@@ -1028,7 +1206,7 @@
         return b;
       });
       return h('div', { class: 'puzzle' },
-        h('div', { class: 'phase-label' }, '🧩 Алдымен — тілдік жұмбақ'),
+        h('div', { class: 'phase-label' }, 'Алдымен — тілдік жұмбақ'),
         h('p', null, pz.intro),
         h('div', { class: 'evidence-grid' }, pz.examples.map(function (e, i) {
           return h('div', { class: 'evidence' }, h('span', { class: 'evidence-no' }, String(i + 1)),
@@ -1041,7 +1219,7 @@
 
     function ruleBlock() {
       var altBox = h('div', { class: 'alt-slot' });
-      var altBtn = ex.alt ? h('button', { class: 'btn btn-ghost btn-block not-clear' }, '🤔 Түсінбедім — басқаша түсіндіріңізші') : null;
+      var altBtn = ex.alt ? h('button', { class: 'btn btn-ghost btn-block not-clear' }, 'Түсінбедім — басқаша түсіндіріңізші') : null;
       if (altBtn) altBtn.addEventListener('click', function () {
         altBtn.remove();
         altBox.appendChild(altPanel(ex.alt));
@@ -1049,14 +1227,14 @@
       return h('div', { class: 'rule-block' },
         ex.scene ? h('p', { class: 'story-scene' }, ex.scene) : null,
         h('div', { class: 'rule-card' },
-          h('div', { class: 'rule-card-label' }, '📐 Ереже'),
+          h('div', { class: 'rule-card-label' }, 'Ереже'),
           h('ul', { class: 'rule-list' }, ex.rule.map(function (r) { return h('li', null, r); }))),
         h('div', { class: 'example big-example' }, h('div', { lang: 'en', class: 'ex-en' }, ex.example.en), h('div', { class: 'ex-kk' }, ex.example.kk)),
         h('div', { class: 'parts' }, ex.parts.map(function (pt) {
           return h('div', { class: 'part' }, h('span', { class: 'part-en', lang: 'en' }, pt.en), h('span', { class: 'part-kk' }, pt.kk));
         })),
         altBtn, altBox,
-        h('h3', { class: 'sub' }, '✍️ Енді өзіңіз'),
+        h('h3', { class: 'sub' }, 'Енді өзіңіз'),
         taskView(ex.task, { ladder: true, onResult: opts.onResult || function () {}, onNext: opts.onDone, nextLabel: opts.doneLabel || 'Жалғастыру →' }));
     }
 
@@ -1088,7 +1266,7 @@
         h('p', { class: 'small' }, alt.compare.note)) : null,
       alt.limits ? h('p', { class: 'limits' }, h('strong', null, 'Бұл түсіндірменің шегі: '), alt.limits) : null,
       alt.example ? h('div', { class: 'example' }, h('div', { lang: 'en', class: 'ex-en' }, alt.example.en), h('div', { class: 'ex-kk' }, alt.example.kk)) : null,
-      alt.check ? h('div', { class: 'alt-check' }, h('div', { class: 'phase-label' }, '✅ Түсінгеніңізді тексеріңіз'),
+      alt.check ? h('div', { class: 'alt-check' }, h('div', { class: 'phase-label' }, 'Түсінгеніңізді тексеріңіз'),
         taskView(alt.check, { ladder: true, onResult: function () {}, onNext: function () {}, nextLabel: '✓ Түсінікті' })) : null);
   }
 
@@ -1098,7 +1276,7 @@
       return h('div', { class: 'scheme timeline', 'aria-label': 'Уақыт сызығы' },
         h('div', { class: 'tl-track' },
           h('div', { class: 'tl-long' }, h('span', { lang: 'en' }, sc.long), h('small', null, 'созылып жатқан әрекет')),
-          h('div', { class: 'tl-point' }, h('span', { class: 'tl-bolt', 'aria-hidden': 'true' }, '⚡'), h('span', { lang: 'en' }, sc.point), h('small', null, 'кенет оқиға'))));
+          h('div', { class: 'tl-point' }, h('span', { class: 'tl-bolt', 'aria-hidden': 'true' }), h('span', { lang: 'en' }, sc.point), h('small', null, 'кенет оқиға'))));
     }
     return h('div', { class: 'scheme slots' }, sc.rows.map(function (row) {
       return h('div', { class: 'slot-row' }, row.map(function (cell) {
@@ -1109,7 +1287,7 @@
 
   function storyView(story) {
     return h('section', { class: 'story' },
-      h('div', { class: 'phase-label' }, '📜 Күрделі тақырып'),
+      h('div', { class: 'phase-label' }, 'Күрделі тақырып'),
       explainerView(story, { onDone: nextStep }));
   }
 
@@ -1123,9 +1301,9 @@
         x.say ? h('div', { class: 'word-say' }, 'шамамен: «' + x.say + '»') : null);
     }
     return h('section', null,
-      h('div', { class: 'goal' }, h('span', { class: 'goal-label' }, '🎯 Сабақтың мақсаты'), h('p', null, lesson.goal)),
+      h('div', { class: 'goal' }, h('span', { class: 'goal-label' }, 'Сабақтың мақсаты'), h('p', null, lesson.goal)),
       lesson.prereq ? h('p', { class: 'banner banner-info' }, lesson.prereq) : null,
-      run && run.ctxFallback ? h('p', { class: 'banner banner-info' }, fallbackNote()) : null,
+      run && run.variant && run.variant.kind === 'neutral' && run.variant.interest ? h('p', { class: 'banner banner-info' }, variantText(lesson, run.variant).sub) : null,
       h('h2', { class: 'task-prompt' }, lesson.title),
       lesson.story ? h('p', { class: 'muted small' }, 'Ережені жоғарыдағы оқиғадан көрдіңіз. Енді жаңа сөздер мен мысалдар.')
         : lesson.explain.map(function (para) { return h('p', null, para); }),
@@ -1135,14 +1313,8 @@
       })),
       h('h3', { class: 'sub' }, 'Жаңа сөздер'),
       h('div', { class: 'word-grid' }, w.core.map(function (x) { return wordTile(x, false); }), w.theme.map(function (x) { return wordTile(x, true); })),
-      w.theme.length ? h('p', { class: 'muted small' }, '🎨 Түспен белгіленген сөздер — сіз таңдаған тақырыптан.') : null,
+      w.theme.length ? h('p', { class: 'muted small' }, 'Белгіленген сөздер — сіз таңдаған тақырыптан.') : null,
       h('button', { class: 'btn btn-primary btn-block', onclick: nextStep }, 'Жаттығуларға көшу →'));
-  }
-
-  function fallbackNote() {
-    var p = profile();
-    var topic = p.interest === 'other' && p.otherTopic ? '«' + p.otherTopic + '»' : '«' + (FEA.contextNames[run.wantedCtx] || '') + '»';
-    return 'Бұл сабақта ' + topic + ' тақырыбына арналған дайын мәтін әлі жоқ. Сондықтан «' + FEA.contextNames[run.ctxKey] + '» тақырыбындағы жалпы мәтін берілді. Сабақтың мақсаты мен күрделілігі өзгермейді.';
   }
 
   // ------------------------------------------------------------ ІС (демонстрационная миссия)
@@ -1173,14 +1345,16 @@
   }
 
   function routeView() {
-    var steps = [{ icon: '🧰', title: 'Тілдік құрал' }].concat(cs.v.scenes.map(function (sc) { return { icon: sc.icon, title: sc.title }; }), [{ icon: '🏁', title: 'Шешім' }]);
+    var steps = [{ title: 'Тілдік құрал' }].concat(cs.v.scenes.map(function (sc) { return { icon: sc.icon, title: sc.title }; }), [{ title: 'Шешім' }]);
     var current = cs.phase === 'intro' ? -1 : cs.phase === 'tool' ? 0 : cs.phase === 'finale' ? steps.length - 1 : cs.i + 1;
-    return h('ol', { class: 'route', 'aria-label': 'Іс маршруты' }, steps.map(function (st, k) {
+    var cur = steps[Math.max(0, current)];
+    return [h('ol', { class: 'route', 'aria-label': 'Іс маршруты' }, steps.map(function (st, k) {
       var state = k < current || (cs.phase === 'unlock' && k === current) ? 'done' : k === current ? 'current' : 'locked';
       return h('li', { class: 'route-step ' + state, 'aria-current': state === 'current' ? 'step' : null },
-        h('span', { class: 'route-dot', 'aria-hidden': 'true' }, state === 'done' ? '✓' : st.icon),
+        h('span', { class: 'route-dot', 'aria-hidden': 'true' }, state === 'done' ? icon('check') : String(k + 1).padStart(2, '0')),
         h('span', { class: 'route-title' }, st.title));
-    }));
+    })),
+    current >= 0 ? h('p', { class: 'route-caption', 'aria-hidden': 'true' }, 'Қадам ' + (current + 1) + ' / ' + steps.length + ' · ', h('strong', null, cur.title)) : null];
   }
 
   function clueCard(clue, n) {
@@ -1194,7 +1368,7 @@
     var p = profile();
     var c = cs.c, v = cs.v;
     var head = h('header', { class: 'case-head' },
-      h('button', { class: 'icon-btn', 'aria-label': 'Істен шығу', onclick: function () { cs = null; go('home'); } }, '✕'),
+      h('button', { class: 'icon-btn', 'aria-label': 'Істен шығу', onclick: function () { cs = null; go('home'); } }, icon('close')),
       h('div', { class: 'case-head-mid' },
         h('div', { class: 'case-no' }, 'ІС ' + c.caseNo), h('div', { class: 'case-title' }, c.title)),
       h('div', { class: 'case-ver small' }, stageLabel(v.stage)));
@@ -1206,7 +1380,7 @@
         h('div', { class: 'stamp' + (rec && rec.solved && rec.solved.length ? ' done' : '') }, rec && rec.solved && rec.solved.length ? 'ШЕШІЛДІ' : 'АШЫҚ ІС'),
         h('h1', null, c.title),
         h('p', { class: 'lead' }, c.intro),
-        h('div', { class: 'goal' }, h('span', { class: 'goal-label' }, '🎯 Тілдік мақсат'), h('p', null, c.goal)),
+        h('div', { class: 'goal' }, h('span', { class: 'goal-label' }, 'Тілдік мақсат'), h('p', null, c.goal)),
         h('div', { class: 'version-card' },
           h('div', { class: 'small muted' }, 'Сіздің нұсқаңыз (профиліңіздің оқу сатысы бойынша):'),
           h('strong', null, v.label + ' · ' + stageLabel(v.stage)),
@@ -1224,7 +1398,7 @@
     } else if (cs.phase === 'tool') {
       body = h('div', null, routeView(),
         h('div', { class: 'card card-pad' },
-          h('div', { class: 'phase-label' }, '🧰 Тергеушінің тілдік құралы'),
+          h('div', { class: 'phase-label' }, 'Тергеушінің тілдік құралы'),
           h('p', { class: 'muted small' }, 'Іздерді түсіну үшін алдымен бір тілдік құралды меңгерейік.'),
           explainerView(v.explainer, { doneLabel: 'Бірінші ізге →', onDone: function () {
             cs.toolDone = true; cs.phase = 'scene'; cs.i = 0; saveCase(); render(); window.scrollTo(0, 0);
@@ -1233,10 +1407,10 @@
       var sc = v.scenes[cs.i];
       body = h('div', null, routeView(),
         h('div', { class: 'card card-pad scene' },
-          h('div', { class: 'scene-place small muted' }, '📍 ' + sc.place),
-          h('h2', null, sc.icon + ' ' + sc.title),
+          h('div', { class: 'scene-place' }, icon('pin'), sc.place),
+          h('h2', null, sc.title),
           clueCard(sc.clue),
-          h('div', { class: 'phase-label' }, '🕵️ Сіздің әрекетіңіз'),
+          h('div', { class: 'phase-label' }, 'Сіздің әрекетіңіз'),
           taskView(E.caseSceneTask(sc), {
             ladder: true,
             wrongNote: 'Іс жалғасады. Бұл із ертең қайталауда тағы шығады.',
@@ -1263,7 +1437,7 @@
       var last = cs.i === v.scenes.length - 1;
       body = h('div', null, routeView(),
         h('div', { class: 'card card-pad unlock' },
-          h('div', { class: 'unlock-badge' }, '🔓 Жаңа мәлімет'),
+          h('div', { class: 'unlock-badge' }, 'Жаңа мәлімет'),
           h('p', { class: 'unlock-text' }, sc2.unlock),
           h('button', { class: 'btn btn-primary btn-block', onclick: function () {
             if (last) {
@@ -1280,19 +1454,19 @@
       body = h('div', null, routeView(),
         h('div', { class: 'card card-pad case-file finale' },
           h('div', { class: 'stamp done' }, 'ІС ЖАБЫЛДЫ'),
-          h('h2', null, '🏁 Шешім'),
+          h('h2', null, 'Шешім'),
           h('div', { class: 'clue-text', lang: 'en' }, v.finale.lines.map(function (l) { return h('p', null, l); })),
           h('p', null, v.finale.kk),
-          h('div', { class: 'goal can-do' }, h('span', { class: 'goal-label' }, '✅ Енді сіз:'), h('p', null, v.canDo))),
+          h('div', { class: 'goal can-do' }, h('span', { class: 'goal-label' }, 'Енді сіз:'), h('p', null, v.canDo))),
         h('div', { class: 'card card-pad' },
-          h('h2', null, '🔁 Осы тілдік құрал басқа тақырыпта'),
+          h('h2', null, 'Осы тілдік құрал басқа тақырыпта'),
           h('p', { class: 'muted small' }, 'Сол мақсат — басқа жағдай мен басқа әрекет:'),
           h('div', { class: 'transfer-grid' }, c.transfer.map(function (t) {
-            return h('div', { class: 'transfer' }, h('div', { class: 'transfer-head' }, t.icon + ' ' + t.theme),
+            return h('div', { class: 'transfer' }, h('div', { class: 'transfer-head' }, t.theme),
               h('p', { class: 'small' }, t.action), h('div', { class: 'ex-en', lang: 'en' }, t.examples[idx] || t.examples[0]));
           }))),
         h('details', { class: 'card card-pad discussion' },
-          h('summary', null, '👨‍👩‍👧 Отбасымен талқылау (міндетті емес)'),
+          h('summary', null, 'Отбасымен талқылау (міндетті емес)'),
           c.discussion.map(function (d) { return h('p', null, d); })),
         h('div', { class: 'stack' },
           h('button', { class: 'btn btn-primary btn-block', onclick: function () { cs = null; go('home'); } }, 'Басты бетке'),
@@ -1306,13 +1480,15 @@
       var rec = (p.cases || {})[c.id];
       var v = E.caseVersionFor(p, c);
       var inProgress = rec && !rec.done && (rec.toolDone || rec.scene > 0);
-      var status = inProgress ? 'Тергеу жалғасып жатыр' : rec && rec.solved && rec.solved.length ? '✓ Шешілді' : 'Жаңа іс';
+      var status = inProgress ? 'Тергеу жалғасып жатыр' : rec && rec.solved && rec.solved.length ? 'Шешілді' : 'Жаңа іс';
       return h('section', { class: 'case-card' },
-        h('div', { class: 'case-card-tab' }, 'АРНАЙЫ ІС ' + c.caseNo),
-        h('h2', null, '🕵️ ' + c.title),
-        h('p', { class: 'small' }, c.goal),
+        h('div', { class: 'case-card-body' },
+          h('p', { class: 'case-card-tab' }, 'Арнайы іс ' + c.caseNo),
+          h('h2', null, c.title),
+          h('p', { class: 'case-card-goal' }, c.goal),
+          h('p', { class: 'case-card-status' }, h('span', { class: 'status-dot' + (inProgress ? ' live' : '') }), status + ' · ' + v.label)),
+        h('div', { class: 'case-card-art', html: TAG_SVG }),
         h('div', { class: 'case-card-foot' },
-          h('span', { class: 'small muted' }, status + ' · ' + v.label),
           h('button', { class: 'btn btn-primary', onclick: function () { openCase(c.id); } }, inProgress ? 'Жалғастыру' : rec && rec.solved && rec.solved.length ? 'Қайта ашу' : 'Істі ашу')));
     });
   }
@@ -1327,20 +1503,20 @@
 
     return page([
       h('section', { class: 'card card-pad result' },
-        h('div', { class: 'result-icon', 'aria-hidden': 'true' }, '✓'),
+        h('div', { class: 'result-icon', 'aria-hidden': 'true' }, icon('check')),
         h('h1', null, isLesson ? 'Миссия орындалды!' : 'Қайталау аяқталды!'),
         isLesson ? h('p', { class: 'muted' }, '«' + r.lesson.title + '» — ', h('strong', null, 'өтілді деп белгіленді.')) : null,
-        isLesson && r.lesson.canDo ? h('div', { class: 'goal can-do' }, h('span', { class: 'goal-label' }, '✅ Енді сіз:'), h('p', null, r.lesson.canDo)) : null,
+        isLesson && r.lesson.canDo ? h('div', { class: 'goal can-do' }, h('span', { class: 'goal-label' }, 'Енді сіз:'), h('p', null, r.lesson.canDo)) : null,
         h('p', { class: 'result-score' }, 'Бірінші әрекеттен дұрыс: ', h('strong', null, s.correct + ' / ' + s.total)),
         h('p', { class: 'muted small' }, s.total && s.correct / s.total < 0.6
           ? 'Бұл тақырып әлі жаңа — бұл қалыпты. Қайталау оны бекітуге көмектеседі.'
           : 'Жақсы нәтиже. Бірнеше күннен кейінгі қайталау оны есте берік сақтауға көмектеседі.'),
-        isLesson ? h('p', { class: 'small' }, '🔁 Бұл сабақтың сұрақтары ертеңнен бастап қайталауға қосылды.') : null,
-        isLesson && r.newReviews ? h('p', { class: 'small' }, '📌 Қате кеткен ' + r.newReviews + ' тапсырма ертең қайталауда қайта шығады.') : null),
+        isLesson ? h('p', { class: 'small' }, 'Бұл сабақтың сұрақтары ертеңнен бастап қайталауға қосылды.') : null,
+        isLesson && r.newReviews ? h('p', { class: 'small' }, 'Қате кеткен ' + r.newReviews + ' тапсырма ертең қайталауда қайта шығады.') : null),
       h('section', { class: 'card card-pad' },
         h('h2', null, 'Қателер және түсіндірме'),
         lessonMistakes.length ? h('div', { class: 'mistake-list' }, lessonMistakes.map(mistakeItem))
-          : h('p', { class: 'empty' }, 'Бұл жолы қате болмады. 🎉')),
+          : h('p', { class: 'empty' }, 'Бұл жолы қате болмады.')),
       h('div', { class: 'stack' },
         rec.kind === 'lesson' ? h('button', { class: 'btn btn-primary btn-block', onclick: function () { startLesson(rec.lesson.id); } }, 'Келесі сабақ: ' + rec.lesson.title) : null,
         rec.kind === 'review' ? h('button', { class: 'btn btn-primary btn-block', onclick: function () { startReview(); } }, 'Қайталауды бастау') : null,
@@ -1365,7 +1541,6 @@
     var completed = Object.keys(p.lessons).map(function (id) { return { lesson: E.getLesson(id), rec: p.lessons[id] }; })
       .filter(function (x) { return x.lesson; })
       .sort(function (a, b) { return (b.rec.completedAtMs || 0) - (a.rec.completedAtMs || 0); });
-    var it = interestMeta(p.interest);
 
     return page([
       h('h1', null, 'Менің прогресім'),
@@ -1383,7 +1558,7 @@
           }
           redraw();
           return h('div', { class: 'skill-progress skill-' + s },
-            h('div', { class: 'skill-result-head' }, h('span', { class: 'skill-icon', 'aria-hidden': 'true' }, sm.icon), h('strong', null, sm.title)),
+            h('div', { class: 'skill-result-head' }, h('span', { class: 'skill-icon' }, icon(s)), h('strong', null, sm.title)),
             stageBox,
             prop ? h('p', { class: 'banner ' + (prop.dir === 'up' ? 'banner-ok' : 'banner-info') }, prop.text) : null);
         }),
@@ -1395,7 +1570,7 @@
         h('h2', null, 'Өтілген сабақтар'),
         completed.length ? h('div', { class: 'list' }, completed.map(function (x) {
           return h('div', { class: 'list-row' },
-            h('span', null, skillMeta(x.lesson.skill).icon + ' ' + x.lesson.title),
+            h('span', { class: 'with-icon skill-' + x.lesson.skill }, h('span', { class: 'skill-icon' }, icon(x.lesson.skill)), x.lesson.title),
             h('span', { class: 'muted small' }, stageLabel(x.lesson.stage) + ' · ' + Math.round(x.rec.lastAccuracy * 100) + '% · ' + x.rec.times + ' рет'));
         })) : h('p', { class: 'empty' }, 'Әзірге аяқталған сабақ жоқ. Бірінші сабақтан бастаңыз!')),
 
@@ -1413,26 +1588,27 @@
         h('h2', null, 'Профиль'),
         h('div', { class: 'list-row' }, h('span', null, 'Аты: ', h('strong', null, p.name)),
           h('button', { class: 'btn btn-ghost btn-small', onclick: function () { go('name', { edit: true }); } }, 'Өзгерту')),
-        h('div', { class: 'list-row' }, h('span', null, 'Қызығушылық: ', h('strong', null, it ? it.title : '—'), p.otherTopic ? ' (' + p.otherTopic + ')' : ''),
+        h('div', { class: 'list-row' }, h('span', null, 'Қызығушылықтар: ', h('strong', null, interestsSummary(p) || '—')),
           h('button', { class: 'btn btn-ghost btn-small', onclick: function () { go('interest', { edit: true }); } }, 'Өзгерту')),
-        h('p', { class: 'muted small' }, 'Қызығушылықты өзгерту сатыңызды өзгертпейді — тек мәтіндер мен мысалдар ауысады.'),
-        h('button', { class: 'btn btn-ghost btn-block', onclick: function () { go('profiles'); } }, '👥 Профильді ауыстыру немесе жаңасын қосу')),
+        h('p', { class: 'muted small' }, 'Қызығушылық сабақтағы рөліңізді және шешім түрін өзгертеді. Сатыңыз, сабақтар реті және тіл мақсаты өзгермейді.'),
+        h('button', { class: 'btn btn-ghost btn-block', onclick: function () { go('profiles'); } }, 'Профильді ауыстыру немесе жаңасын қосу')),
 
       h('section', { class: 'card card-pad' },
         h('h2', null, 'Деректер'),
-        h('p', { class: 'small' }, '💾 Прогресс тек осы құрылғыда, осы браузерде сақталады. Басқа құрылғыға автоматты түрде көшпейді.'),
+        h('p', { class: 'small' }, 'Прогресс тек осы құрылғыда, осы браузерде сақталады. Басқа құрылғыға автоматты түрде көшпейді.'),
         h('div', { class: 'backup-box' },
           h('h3', { class: 'sub' }, 'Сақтық көшірме'),
           h('p', { class: 'small muted' }, 'Файл тек сіздің құрылғыңызға жүктеледі. Ешқайда жіберілмейді.'),
           h('div', { class: 'row-gap' },
-            h('button', { class: 'btn btn-secondary', onclick: downloadBackup }, '⬇️ Сақтық көшірме жасау'),
-            h('button', { class: 'btn btn-ghost', onclick: pickBackupFile }, '⬆️ Қалпына келтіру'))),
+            h('button', { class: 'btn btn-secondary', onclick: downloadBackup }, icon('save'), 'Сақтық көшірме жасау'),
+            h('button', { class: 'btn btn-ghost', onclick: pickBackupFile }, icon('upload'), 'Қалпына келтіру'))),
         h('button', { class: 'btn btn-ghost btn-block', onclick: function () {
           FEA.ui.confirmDialog({ title: 'Осы профильдің прогресін тазалау керек пе?', text: '«' + p.name + '» профилінің диагностикасы, сабақтары, қайталаулары мен қателері өшіріледі. Аты мен қызығушылығы қалады.', ok: 'Тазалау', danger: true })
             .then(function (yes) {
               if (!yes) return;
               var fresh = store.newProfile(p.name, p.presetLevel);
               fresh.id = p.id; fresh.interest = p.interest; fresh.otherTopic = p.otherTopic;
+              fresh.interests = Array.isArray(p.interests) ? p.interests.slice() : null;
               if (!fresh.stages) fresh.stages = Object.assign({}, p.stages);
               state.profiles[p.id] = fresh; persist(); go('diagIntro');
             });
@@ -1447,22 +1623,22 @@
   /* Идея «Мен не істей аламын»: практические результаты пройденных миссий и следующая миссия по каждому навыку. */
   function canDoSection(p) {
     return h('section', { class: 'card card-pad' },
-      h('h2', null, '🗺️ ' + FEA.canDoTitle),
+      h('h2', null, FEA.canDoTitle),
       h('p', { class: 'muted small' }, 'Әр орындалған миссиядан кейін ағылшынша не істей алатыныңыз. Бұл ұпай емес — нақты дағды.'),
       (FEA.cases || []).filter(function (c) { var r = p.cases && p.cases[c.id]; return r && r.solved && r.solved.length; }).map(function (c) {
         var solved = p.cases[c.id].solved;
         var v = c.versions.filter(function (x) { return x.stage === solved[solved.length - 1]; })[0] || c.versions[0];
-        return h('div', { class: 'cando-skill cando-case' }, h('strong', null, '🕵️ Іс ' + c.caseNo + ': ' + c.title), h('ul', { class: 'cando-list' }, h('li', null, '✅ ' + v.canDo)));
+        return h('div', { class: 'cando-skill cando-case' }, h('strong', null, 'Іс ' + c.caseNo + ': ' + c.title), h('ul', { class: 'cando-list' }, h('li', null, icon('check'), h('span', null, v.canDo))));
       }),
       E.SKILL_ORDER.map(function (s) {
         var done = E.lessonsForSkill(s).filter(function (l) { return p.lessons[l.id]; });
         var next = E.nextLessonFor(p, s);
         return h('div', { class: 'cando-skill skill-' + s },
-          h('div', { class: 'skill-result-head' }, h('span', { class: 'skill-icon', 'aria-hidden': 'true' }, skillMeta(s).icon), h('strong', null, skillMeta(s).title)),
-          done.length ? h('ul', { class: 'cando-list' }, done.map(function (l) { return h('li', null, '✅ ' + (l.canDo || l.title)); }))
+          h('div', { class: 'skill-result-head' }, h('span', { class: 'skill-icon' }, icon(s)), h('strong', null, skillMeta(s).title)),
+          done.length ? h('ul', { class: 'cando-list' }, done.map(function (l) { return h('li', null, icon('check'), h('span', null, l.canDo || l.title)); }))
             : h('p', { class: 'empty small' }, 'Әзірге орындалған миссия жоқ.'),
           next ? h('div', { class: 'cando-next' },
-            h('span', { class: 'small' }, '➡️ Келесі миссия: ', h('strong', null, E.missionFor(next, E.contextKeyFor(p)).title)),
+            h('span', { class: 'small' }, 'Келесі миссия: ', h('strong', null, E.missionFor(next, E.pickVariant(next, p).key).title)),
             h('button', { class: 'btn btn-secondary btn-small', onclick: function () { startLesson(next.id); } }, 'Бастау')) : null);
       }));
   }
@@ -1527,8 +1703,8 @@
           persist();
           FEA.ui.confirmDialog({ title: 'Қосылды', text: 'Жаңа профильдер: ' + added.join(', ') + '. Қазіргі профильдер өзгерген жоқ.', ok: 'Жақсы', cancel: 'Жабу' })
             .then(function () { go(profile() ? 'progress' : 'profiles'); });
-        } }, '➕ Тек жаңа профильдерді қосу (' + news.length + ')') : h('p', { class: 'small muted' }, 'Файлда жаңа профиль жоқ: барлығы құрылғыда бар.'),
-        h('button', { class: 'btn btn-secondary btn-block', onclick: downloadBackup }, '⬇️ Алдымен қазіргі деректердің көшірмесін жасау'),
+        } }, 'Тек жаңа профильдерді қосу (' + news.length + ')') : h('p', { class: 'small muted' }, 'Файлда жаңа профиль жоқ: барлығы құрылғыда бар.'),
+        h('button', { class: 'btn btn-secondary btn-block', onclick: downloadBackup }, icon('save'), 'Алдымен қазіргі деректердің көшірмесін жасау'),
         h('button', { class: 'btn btn-danger btn-block', onclick: function () {
           FEA.ui.confirmDialog({ title: 'Барлық деректерді файлмен ауыстыру керек пе?',
             text: 'Осы құрылғыдағы барлық профильдер мен прогресс файлдағы деректермен алмастырылады. Қазіргі деректерді қайтару мүмкін болмайды, егер алдымен көшірме жасамасаңыз.',
@@ -1575,7 +1751,7 @@
     if (needsProfile.indexOf(route.name) !== -1 && !profile()) route = { name: startRoute(), params: {} };
     if (['home', 'skills', 'progress'].indexOf(route.name) !== -1) {
       var p = profile();
-      if (!p.interest) route = { name: 'interest', params: {} };
+      if (!E.hasInterestChoice(p)) route = { name: 'interest', params: {} };
       else if (!p.stages || !p.diagnostic) route = { name: 'diagIntro', params: {} };
     }
     if (route.name === 'lesson' && !run) route = { name: 'home', params: {} };

@@ -65,6 +65,28 @@ function checkTask(t, where) {
   }
 }
 
+/*
+ * Вариант по интересу: известные направления и тип действия, роль, своя миссия,
+ * ровно 2 задания (решение + форма), у выбора с последствиями — последствие на каждый вариант.
+ * Ключ 'v-<первое направление>'.
+ */
+var DIRS = {};
+(FEA.directions || []).forEach(function (d) { DIRS[d.id] = d; });
+function checkVariant(l, c, ctx, w) {
+  var vw = w + '/' + c;
+  if (c.indexOf('v-') !== 0) err(vw + ': ключ варианта должен начинаться с v-');
+  if (!Array.isArray(ctx.interests) || !ctx.interests.length) err(vw + ': нет направлений');
+  (ctx.interests || []).forEach(function (i) { if (!DIRS[i]) err(vw + ': неизвестное направление ' + i); });
+  if (ctx.interests && c !== 'v-' + ctx.interests[0]) err(vw + ': ключ не совпадает с первым направлением');
+  if (!FEA.actionModes[ctx.mode]) err(vw + ': неизвестный тип действия ' + ctx.mode);
+  if (!ctx.role || !ctx.label || !ctx.textHeading) err(vw + ': нет роли, названия или заголовка материала');
+  if (!ctx.mission || !ctx.mission.title || !ctx.mission.scene) err(vw + ': нет миссии варианта');
+  if (ctx.tasks.length !== 2) err(vw + ': у варианта должно быть 2 задания (решение + использование формы)');
+  ctx.tasks.forEach(function (t, i) {
+    if (t.outcomes && (!t.options || t.outcomes.length !== t.options.length)) err(vw + ' задание ' + (i + 1) + ': последствий не столько, сколько вариантов');
+  });
+}
+
 function key(t) { return (t.prompt + '|' + (t.sentence || '') + '|' + (t.text ? t.text.join(' ') : '') + '|' + (t.sign ? t.sign.join(' ') : '')).toLowerCase(); }
 
 // Ступени x навыки: хотя бы по уроку, порядок уникален
@@ -108,7 +130,8 @@ FEA.lessons.forEach(function (l) {
 
   Object.keys(l.contexts).forEach(function (c) {
     var ctx = l.contexts[c];
-    if (KNOWN_CTX.indexOf(c) === -1) err(w + ': неизвестная тема ' + c);
+    if (E.isActionVariant(ctx)) checkVariant(l, c, ctx, w);
+    else if (KNOWN_CTX.indexOf(c) === -1) err(w + ': неизвестная тема ' + c);
     var core = l.words.length, theme = (ctx.themeWords || []).length;
     if (theme / (core + theme) > S.maxThemeWordShare + 1e-9) err(w + '/' + c + ': тематических слов больше половины (' + theme + ' из ' + (core + theme) + ')');
     var total = l.tasks.length + ctx.tasks.length;

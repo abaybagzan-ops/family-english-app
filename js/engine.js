@@ -25,6 +25,9 @@ FEA.engine = (function () {
   /* Миссия урока с учётом темы. */
   function missionFor(lesson, ctxKey) {
     var m = lesson.mission || { title: lesson.title, scene: lesson.goal };
+    var ctx = lesson.contexts[ctxKey];
+    // Вариант по интересу задаёт свою роль и сцену; практический результат (canDo) у урока один
+    if (ctx && ctx.mission) return { title: ctx.mission.title, scene: ctx.mission.scene, canDo: lesson.canDo || '', role: ctx.role || '' };
     var scene = m.contexts && m.contexts[ctxKey] ? m.contexts[ctxKey] : m.scene;
     return { title: m.title, scene: scene, canDo: lesson.canDo || '' };
   }
@@ -154,6 +157,108 @@ FEA.engine = (function () {
   function contextKeyFor(profile) {
     var it = FEA.interests.filter(function (i) { return i.id === profile.interest; })[0];
     return it ? it.context : 'everyday';
+  }
+
+  // ---------- Интересы (версия 2)
+  var directionsById = {};
+  (FEA.directions || []).forEach(function (d) { directionsById[d.id] = d; });
+  function directionMeta(id) { return id === 'custom' ? FEA.customDirection : directionsById[id] || null; }
+
+  /* Проверка и очистка одного выбранного направления. */
+  function cleanInterest(x) {
+    if (!x || typeof x !== 'object' || typeof x.id !== 'string') return null;
+    if (x.id === 'custom') {
+      var custom = typeof x.custom === 'string' ? x.custom.trim().slice(0, 40) : '';
+      var modes = Array.isArray(x.likes) ? x.likes.filter(function (m) { return FEA.customDirection.modeChoices.indexOf(m) !== -1; }).slice(0, 2) : [];
+      return { id: 'custom', custom: custom, likes: modes };
+    }
+    var d = directionsById[x.id];
+    if (!d) return null;
+    var ok = d.likes.map(function (l) { return l.id; });
+    var likes = Array.isArray(x.likes) ? x.likes.filter(function (l) { return ok.indexOf(l) !== -1; }) : [];
+    return { id: d.id, likes: likes };
+  }
+
+  /*
+   * Интересы профиля в порядке приоритета (не больше трёх).
+   *  null — ученик ещё не выбирал;  [] — выбрал «без интересов».
+   * Старое поле interest читается, но не перезаписывается.
+   */
+  function profileInterests(profile) {
+    if (!profile) return null;
+    if (Array.isArray(profile.interests)) {
+      var seen = {};
+      return profile.interests.map(cleanInterest).filter(function (x) {
+        if (!x || seen[x.id]) return false; seen[x.id] = 1; return true;
+      }).slice(0, FEA.maxDirections);
+    }
+    if (profile.interest === 'other') return [{ id: 'custom', custom: (profile.otherTopic || '').slice(0, 40), likes: [] }];
+    var mapped = FEA.legacyInterestMap[profile.interest];
+    if (mapped) return [{ id: mapped, likes: [] }];
+    return null;
+  }
+
+  function hasInterestChoice(profile) { return profileInterests(profile) !== null; }
+
+  /* Предпочитаемые типы действия для направления (по уточнениям). */
+  function likedModes(it) {
+    if (it.id === 'custom') return it.likes.slice();
+    var d = directionsById[it.id];
+    return d.likes.filter(function (l) { return it.likes.indexOf(l.id) !== -1; }).map(function (l) { return l.mode; });
+  }
+
+  function isActionVariant(ctx) { return !!(ctx && ctx.mode && ctx.interests); }
+
+  /*
+   * Выбор варианта урока по интересам.
+   *  kind: 'action'  — вариант для направления ученика (меняются роль, задача и решение);
+   *        'mode'    — для своей темы ученика вариантов нет, но совпал любимый тип действия;
+   *        'topic'   — есть только текст на тему направления (действие общее);
+   *        'neutral' — подходящего нет: общий вариант урока, без подстановки слов.
+   * Интерес не меняет ступень, порядок уроков и основные задания.
+   */
+  function pickVariant(lesson, profile) {
+    var list = profileInterests(profile) || [];
+    var used = profile && profile.lessons && profile.lessons[lesson.id] ? profile.lessons[lesson.id].contextsUsed || [] : [];
+    var best = null;
+    Object.keys(lesson.contexts).forEach(function (key) {
+      var ctx = lesson.contexts[key];
+      list.forEach(function (it, pos) {
+        var weight = FEA.maxDirections - pos;           // 3, 2, 1 — порядок выбора
+        var modes = likedModes(it);
+        var score = 0, kind = null;
+        if (isActionVariant(ctx) && it.id !== 'custom' && ctx.interests.indexOf(it.id) !== -1) {
+          kind = 'action';
+          score = 100 + weight * 10 + (modes.indexOf(ctx.mode) !== -1 ? 5 : 0) + (ctx.interests[0] === it.id ? 2 : 0);
+        } else if (isActionVariant(ctx) && modes.indexOf(ctx.mode) !== -1) {
+          kind = 'mode';
+          score = 50 + weight * 10;
+        } else if (!isActionVariant(ctx) && it.id !== 'custom' && directionsById[it.id].topics.indexOf(key) !== -1) {
+          kind = 'topic';
+          score = 20 + weight * 10;
+        }
+        if (!kind) return;
+        if (used.indexOf(key) === -1) score += 1;         // при равенстве — ещё не пройденный вариант
+        if (!best || score > best.score) best = { key: key, kind: kind, score: score, interest: it };
+      });
+    });
+    if (best) return { key: best.key, ctx: lesson.contexts[best.key], kind: best.kind, interest: best.interest };
+    var def = lesson.defaultContext || 'everyday';
+    return { key: def, ctx: lesson.contexts[def], kind: 'neutral', interest: list[0] || null };
+  }
+
+  /* Все варианты урока для ручного выбора: сначала варианты-действия. */
+  function lessonVariants(lesson) {
+    var keys = Object.keys(lesson.contexts);
+    return keys.filter(function (k) { return isActionVariant(lesson.contexts[k]); })
+      .concat(keys.filter(function (k) { return !isActionVariant(lesson.contexts[k]); }))
+      .map(function (k) { return { key: k, ctx: lesson.contexts[k], action: isActionVariant(lesson.contexts[k]) }; });
+  }
+
+  function variantLabel(lesson, key) {
+    var ctx = lesson.contexts[key];
+    if (ctx && ctx.label) return ctx.label;
+    return 'Мәтін: ' + (FEA.contextNames[key] || key);
   }
 
   /*
@@ -447,6 +552,14 @@ FEA.engine = (function () {
     isNearMiss: isNearMiss,
     checkOrder: checkOrder,
     contextKeyFor: contextKeyFor,
+    profileInterests: profileInterests,
+    hasInterestChoice: hasInterestChoice,
+    cleanInterest: cleanInterest,
+    directionMeta: directionMeta,
+    pickVariant: pickVariant,
+    lessonVariants: lessonVariants,
+    variantLabel: variantLabel,
+    isActionVariant: isActionVariant,
     lessonWords: lessonWords,
     dueReviewIds: dueReviewIds,
     countDue: countDue,

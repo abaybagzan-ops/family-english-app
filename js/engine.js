@@ -181,9 +181,32 @@ FEA.engine = (function () {
    *  - ошибки из урока: 'm|<урок>|<тема>|<фаза>|<номер>' — то же задание через день,
    *    для задания по тексту вместе с текстом.
    */
+  // ---------- Дела (демонстрационные миссии)
+  var casesById = {};
+  (FEA.cases || []).forEach(function (c) { casesById[c.id] = c; });
+  function getCase(id) { return casesById[id] || null; }
+  /* Версия дела по ступени чтения профиля (ученик может выбрать другую). */
+  function caseVersionFor(profile, c) {
+    var st = profile && profile.stages ? profile.stages.reading : 0;
+    return c.versions.filter(function (v) { return v.stage === st; })[0] || c.versions[0];
+  }
+  /* Задание сцены вместе с лесенкой подсказок сцены. */
+  function caseSceneTask(scene) {
+    return Object.assign({}, scene.task, { hints: scene.hints });
+  }
+
   function getReview(id) {
     var item = reviewItems[id];
     if (item) return { task: item, text: null, skill: item.skill, source: item.source };
+    if (id.indexOf('q|') === 0) {
+      var q = id.split('|');
+      var c = casesById[q[1]];
+      var v = c && c.versions.filter(function (x) { return x.stage === Number(q[2]); })[0];
+      var sc = v && v.scenes[Number(q[3])];
+      if (!sc) return null;
+      return { task: caseSceneTask(sc), text: { title: sc.clue.label, lines: sc.clue.lines, glossary: sc.clue.glossary, sign: sc.clue.sign },
+        skill: 'reading', source: 'case:' + c.id };
+    }
     if (id.indexOf('m|') !== 0) return null;
     var p = id.split('|');
     var lesson = lessonsById[p[1]];
@@ -222,6 +245,16 @@ FEA.engine = (function () {
   /* Ошибка в уроке: задание вернётся в повторение через первый интервал (по умолчанию завтра). */
   function scheduleMistake(profile, lessonId, ctxKey, phase, idx, now) {
     var id = ['m', lessonId, ctxKey, phase, idx].join('|');
+    if (!getReview(id)) return null;
+    var r = profile.reviews[id];
+    if (!r) profile.reviews[id] = { box: 0, due: now + S.reviewIntervalsDays[0] * DAY, added: now, correct: 0, wrong: 1, lastAt: now };
+    else { r.box = 0; r.due = now + S.reviewIntervalsDays[0] * DAY; r.wrong = (r.wrong || 0) + 1; r.lastAt = now; }
+    return id;
+  }
+
+  /* Ошибка в деле: задание сцены вернётся в повторение. */
+  function scheduleCaseMistake(profile, caseId, stage, idx, now) {
+    var id = ['q', caseId, stage, idx].join('|');
     if (!getReview(id)) return null;
     var r = profile.reviews[id];
     if (!r) profile.reviews[id] = { box: 0, due: now + S.reviewIntervalsDays[0] * DAY, added: now, correct: 0, wrong: 1, lastAt: now };
@@ -396,6 +429,10 @@ FEA.engine = (function () {
     nextLessonFor: nextLessonFor,
     contextFor: contextFor,
     missionFor: missionFor,
+    getCase: getCase,
+    caseVersionFor: caseVersionFor,
+    caseSceneTask: caseSceneTask,
+    scheduleCaseMistake: scheduleCaseMistake,
     getReview: getReview,
     scheduleMistake: scheduleMistake,
     interestCoverage: interestCoverage,

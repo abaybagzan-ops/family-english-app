@@ -153,6 +153,59 @@ FEA.diagnostic.forEach(function (d) {
 });
 SKILLS.forEach(function (s) { if (perSkill[s] !== 5) err('Диагностика: в части ' + s + ' должно быть 5 вопросов, есть ' + (perSkill[s] || 0)); });
 
+// Объяснения: загадка, «Түсінбедім», проверка
+function answerText(t) { return t.type === 'choice' ? t.options[t.answer] : t.type === 'type' ? t.answers[0] : t.answer; }
+function checkExplainer(ex, w) {
+  if (!ex) return err(w + ': нет объяснения');
+  if (!ex.rule || !ex.rule.length || ex.rule.length > 3) err(w + ': правило должно быть в 1–3 предложениях');
+  if (!ex.example || !ex.parts || !ex.parts.length) err(w + ': нет примера с разбором');
+  if (ex.puzzle) {
+    var pz = ex.puzzle;
+    if (!pz.examples || pz.examples.length < 2 || !pz.options || !pz.options[pz.answer] || !pz.after) err(w + ': неполная языковая загадка');
+  }
+  if (ex.alt) {
+    var a = ex.alt;
+    if (!a.simple || !a.limits || !a.example || !a.check) err(w + ': «Түсінбедім» без простого объяснения, границ, примера или проверки');
+    if (a.check) checkTask(a.check, w + ' «Түсінбедім» проверка');
+    if (a.scheme && ['slots', 'timeline'].indexOf(a.scheme.type) === -1) err(w + ': неизвестная схема');
+  }
+  checkTask(ex.task, w + ' задание объяснения');
+}
+function checkHintsNoAnswer(t, hints, w) {
+  var ans = String(answerText(t) || '').toLowerCase();
+  if (ans.length < 4) return;
+  (hints || []).forEach(function (hnt, i) { if (String(hnt).toLowerCase().indexOf(ans) !== -1) err(w + ': подсказка ' + (i + 1) + ' содержит готовый ответ «' + ans + '»'); });
+}
+FEA.lessons.forEach(function (l) {
+  if (l.story && (l.story.puzzle || l.story.alt)) checkExplainer(l.story, 'Урок ' + l.id + ' история');
+});
+
+// Дела
+(FEA.cases || []).forEach(function (c) {
+  var w = 'Дело ' + c.id;
+  if (!c.title || !c.intro || !c.goal) err(w + ': нет названия, вступления или цели');
+  var stages = c.versions.map(function (v) { return v.stage; });
+  if (new Set(stages).size !== stages.length) err(w + ': повтор версии');
+  FEA.stages.forEach(function (st) { if (stages.indexOf(st.id) === -1) err(w + ': нет версии для ступени ' + st.id); });
+  (c.transfer || []).forEach(function (t) { if (!t.examples || t.examples.length !== c.versions.length) err(w + ': перенос «' + t.theme + '» — нужен пример для каждой версии'); });
+  c.versions.forEach(function (v) {
+    var vw = w + ' версия ' + v.stage;
+    if (!v.label || !v.supports || !v.canDo || !v.finale) err(vw + ': нет описания, опор, результата или развязки');
+    checkExplainer(v.explainer, vw);
+    if (!v.scenes || v.scenes.length !== 4) err(vw + ': должно быть 4 сцены');
+    (v.scenes || []).forEach(function (sc, i) {
+      var sw = vw + ' сцена ' + (i + 1);
+      if (!sc.clue || !sc.clue.lines || !sc.clue.lines.length) err(sw + ': нет улики');
+      if (!sc.hints || sc.hints.length !== 3) err(sw + ': нужно 3 подсказки (вопрос, правило, каркас)');
+      if (!sc.unlock) err(sw + ': нет продолжения сюжета');
+      checkTask(sc.task, sw);
+      checkHintsNoAnswer(sc.task, sc.hints, sw);
+      if (!E.getReview(['q', c.id, v.stage, i].join('|'))) err(sw + ': не находится для повторения');
+    });
+    checkHintsNoAnswer(v.explainer.task, v.explainer.task.hints, vw + ' задание объяснения');
+  });
+});
+
 // Семейные профили
 (FEA.familyProfiles || []).forEach(function (fp) {
   if (!FEA.levelPresets.some(function (lp) { return lp.id === fp.level; })) err('Профиль ' + fp.name + ': неизвестный уровень ' + fp.level);

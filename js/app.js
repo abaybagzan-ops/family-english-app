@@ -82,58 +82,107 @@
 
   // ------------------------------------------------------------ задания
   /*
-   * Универсальный показ задания (диагностика, урок, повторение, история).
+   * Универсальный показ задания (диагностика, урок, повторение, история, дело).
    * opts: { onResult(firstTryOk, answerText, info), onNext, nextLabel, text, dontKnow, wrongNote,
-   *         secondTry, hint, lesson, ctxKey }
-   * secondTry: после первой ошибки — подсказка и ещё одна попытка (в диагностике выключено).
-   * В результат (точность) идёт только первая попытка; при ошибке задание уходит в повторение.
+   *         ladder, hint, lesson, ctxKey }
+   * ladder: лесенка подсказок — 1) наводящий вопрос, 2) правило / нужная часть, 3) каркас ответа,
+   *         4) решение. Решение показывается только после попытки ученика, сделанной ПОСЛЕ третьей подсказки.
+   *         В диагностике лесенки нет: одна попытка.
+   * В точность идёт только первая попытка без подсказок; иначе задание уходит в повторение.
    */
   function genericHint(task, opts) {
     if (opts.text || task.text || task.sign) return 'Жауап мәтінде бар. Сұрақтағы негізгі сөзді мәтіннен тауып, сол сөйлемді қайта оқыңыз.';
     if (task.type === 'order') return 'Ағылшын сөйлемі көбіне «кім — не істейді — қалғаны» ретімен құрылады.';
     if (task.type === 'type' && task.sentence) return 'Сөйлемге қайта қараңыз: кім туралы айтылған және әрекет қашан болған?';
     if (task.type === 'type') return 'Сабақтағы жаңа сөздерді еске түсіріп, жазылуын тексеріңіз.';
-    return 'Бұл нұсқа сәйкес келмейді. Қалған нұсқаларды сұрақпен тағы бір рет салыстырыңыз.';
+    return 'Сұрақты қайта оқыңыз: онда не сұралып тұр — кім, не, қашан?';
+  }
+
+  function guidingQuestion(task, opts) {
+    if (opts.text || task.text || task.sign) return 'Сұрақтағы ең маңызды сөз қайсы? Оны мәтіннен іздеңіз.';
+    if (task.type === 'order') return 'Сөйлем кім туралы? Сол сөзден бастап көріңіз.';
+    if (task.type === 'type') return 'Бұл жерде қандай сөз керек: зат па, әрекет пе, әлде сипаттама ма?';
+    return 'Әр нұсқаны сұрақпен салыстырыңыз: қайсысы толық сәйкес келеді?';
+  }
+
+  /* Каркас ответа: показывает форму, но не сам ответ. */
+  function autoScaffold(task) {
+    if (task.type === 'type') {
+      var a = task.answers[0];
+      return 'Жауаптың пішіні: ' + a.split(' ').map(function (w) { return w.charAt(0) + w.slice(1).replace(/[a-z]/gi, '_'); }).join('  ') + ' (' + a.split(' ').length + ' сөз)';
+    }
+    if (task.type === 'order') return 'Сөйлем «' + task.answer.split(' ')[0] + '» сөзінен басталады.';
+    return 'Бір қате нұсқаны алып тастадық. Енді таңдау оңайырақ.';
+  }
+
+  function buildLadder(task, opts) {
+    var hs = task.hints || [];
+    return [
+      { label: '1-кеңес · сұрақ', text: hs[0] || guidingQuestion(task, opts) },
+      { label: '2-кеңес · ереже', text: hs[1] || opts.hint || task.hint || genericHint(task, opts) },
+      { label: '3-кеңес · жауаптың қаңқасы', text: hs[2] || autoScaffold(task), scaffold: true }
+    ];
   }
 
   function taskView(task, opts) {
     var answered = false;
     var attempts = 0;
+    var level = 0;                 // сколько подсказок открыто
+    var attemptsAtLevel3 = 0;      // попытки после третьей подсказки
+    var ladder = opts.ladder ? buildLadder(task, opts) : null;
     var feedback = h('div', { class: 'feedback-slot', 'aria-live': 'polite' });
-    var hintBox = h('div', { class: 'hint-box hidden', role: 'status' });
+    var hintList = h('ol', { class: 'hint-ladder hidden', 'aria-live': 'polite' });
+    var hintBtn = ladder ? h('button', { class: 'btn btn-ghost btn-small hint-btn' }, '💡 Кеңес керек') : null;
+    var retryNote = h('p', { class: 'retry-note hidden', role: 'status' });
     var nextBtn = h('button', { class: 'btn btn-primary btn-block hidden', onclick: function () { opts.onNext(); } }, opts.nextLabel || 'Келесі →');
+    var api = { attempt: attempt, complete: complete, onScaffold: null };
+
+    function openHint() {
+      if (!ladder || level >= ladder.length) return;
+      var step = ladder[level];
+      level++;
+      hintList.classList.remove('hidden');
+      hintList.appendChild(h('li', { class: 'hint-step' }, h('span', { class: 'hint-label' }, step.label), h('span', null, step.text)));
+      if (step.scaffold && api.onScaffold) api.onScaffold();
+      if (level >= ladder.length && hintBtn) { hintBtn.disabled = true; hintBtn.textContent = 'Барлық кеңес ашылды'; }
+    }
+    if (hintBtn) hintBtn.addEventListener('click', openHint);
 
     function complete(firstTryOk, finalOk, answerText, correctText) {
       if (answered) return;
       answered = true;
-      hintBox.classList.add('hidden');
-      opts.onResult(firstTryOk, answerText, { final: finalOk, attempts: attempts });
-      var head = finalOk ? (firstTryOk ? '✓ Дұрыс!' : '✓ Дұрыс! Екінші әрекетте таптыңыз.') : '○ Ештеңе етпейді — бірге қарайық.';
-      feedback.appendChild(h('div', { class: 'feedback ' + (finalOk ? 'feedback-ok' : 'feedback-bad') },
+      retryNote.classList.add('hidden');
+      if (hintBtn) hintBtn.classList.add('hidden');
+      opts.onResult(firstTryOk, answerText, { final: finalOk, attempts: attempts, hints: level });
+      var head = finalOk ? (firstTryOk ? '✓ Дұрыс!' : '✓ Дұрыс! Кеңеспен өзіңіз таптыңыз.') : '📘 Шешімін бірге қарайық';
+      feedback.appendChild(h('div', { class: 'feedback ' + (finalOk ? 'feedback-ok' : 'feedback-solution') },
         h('div', { class: 'feedback-head' }, head),
-        !finalOk && correctText ? h('div', { class: 'feedback-answer' }, 'Дұрыс жауап: ', h('strong', { lang: 'en' }, correctText)) : null,
+        !finalOk && correctText ? h('div', { class: 'feedback-answer' }, 'Шешімі: ', h('strong', { lang: 'en' }, correctText)) : null,
         task.explain ? h('p', { class: 'feedback-explain' }, task.explain) : null,
-        !firstTryOk ? h('p', { class: 'feedback-note' }, finalOk ? 'Бұл тапсырма бекіту үшін кейін тағы бір рет шығады.' : (opts.wrongNote || 'Бұл тақырып кейін қайталауға қосылады.')) : null
+        !firstTryOk ? h('p', { class: 'feedback-note' }, finalOk ? 'Бұл тапсырма бекіту үшін кейін тағы бір рет шығады. Прогресс сақталды.' : (opts.wrongNote || 'Бұл тақырып кейін қайталауға қосылады. Прогресс сақталды.')) : null
       ));
       nextBtn.classList.remove('hidden');
       nextBtn.focus();
     }
 
-    /* Попытка ответа. Возвращает true, если дана вторая попытка. */
+    /* Попытка ответа. Возвращает true, если ученик отвечает ещё раз. */
     function attempt(ok, answerText, correctText) {
       if (answered) return false;
       attempts++;
-      if (ok) { complete(attempts === 1, true, answerText, correctText); return false; }
-      if (opts.secondTry && attempts === 1) {
-        hintBox.textContent = '💡 ' + (opts.hint || task.hint || genericHint(task, opts)) + ' Тағы бір рет байқап көріңіз.';
-        hintBox.classList.remove('hidden');
+      if (ok) { complete(attempts === 1 && level === 0, true, answerText, correctText); return false; }
+      if (!ladder) { complete(false, false, answerText, correctText); return false; }
+      if (level < ladder.length) {
+        openHint();
+        retryNote.textContent = 'Әлі емес — бұл қалыпты. Кеңесті оқып, тағы бір рет байқап көріңіз.';
+        retryNote.classList.remove('hidden');
         return true;
       }
+      attemptsAtLevel3++;
+      if (attemptsAtLevel3 < 1) return true;
       complete(false, false, answerText, correctText);
       return false;
     }
 
-    var api = { attempt: attempt, complete: complete };
     var body;
     if (task.type === 'choice') body = choiceBody(task, api, opts);
     else if (task.type === 'type') body = typeBody(task, api);
@@ -146,7 +195,9 @@
       h('h2', { class: 'task-prompt' }, task.prompt),
       taskMaterial(task),
       body,
-      hintBox,
+      retryNote,
+      hintList,
+      hintBtn && task.type !== 'match' ? h('div', { class: 'hint-row' }, hintBtn) : null,
       feedback,
       nextBtn
     );
@@ -182,12 +233,18 @@
       var b = h('button', { class: 'option', lang: /[a-z]/i.test(o.text) && !/[а-яәіңғүұқөһ]/i.test(o.text) ? 'en' : null }, o.text);
       b.addEventListener('click', function () {
         if (o.correct) { lockAll(); api.attempt(true, o.text, correctText); return; }
-        b.classList.add('is-wrong'); b.disabled = true;
+        b.classList.add('is-wrong'); b.disabled = true; b.setAttribute('aria-label', o.text + ' — сәйкес емес');
         if (!api.attempt(false, o.text, correctText)) lockAll();
       });
       buttons.push(b);
       wrap.appendChild(b);
     });
+    // Каркас: убрать ещё один неверный вариант, если он остался
+    api.onScaffold = function () {
+      for (var i = 0; i < buttons.length; i++) {
+        if (!opts2[i].correct && !buttons[i].disabled) { buttons[i].disabled = true; buttons[i].classList.add('is-eliminated'); return; }
+      }
+    };
     var dk = opts.dontKnow ? h('button', { class: 'btn btn-ghost btn-small', onclick: function () {
       lockAll();
       api.complete(false, false, '(білмеймін)', correctText);
@@ -210,7 +267,8 @@
     function lock(ok) {
       input.disabled = true; check.disabled = true; dk.disabled = true;
       input.classList.remove('is-hint');
-      input.classList.add(ok ? 'is-correct' : 'is-wrong');
+      input.classList.remove('is-retry');
+      input.classList.add(ok ? 'is-correct' : 'is-solution');
     }
     function submit() {
       if (!input.value.trim() || input.disabled) return;
@@ -226,7 +284,7 @@
       layoutHint.classList.add('hidden');
       if (ok) { lock(true); api.attempt(true, input.value, task.answers[0]); return; }
       if (api.attempt(false, input.value, task.answers[0])) {
-        input.classList.add('is-hint');
+        input.classList.add('is-retry');
         input.select();
         input.focus();
       } else lock(false);
@@ -235,6 +293,7 @@
       check.disabled = !input.value.trim();
       layoutHint.classList.add('hidden');
       input.classList.remove('is-hint');
+      input.classList.remove('is-retry');
     });
     input.addEventListener('keydown', function (e) { if (e.key === 'Enter') submit(); });
     check.addEventListener('click', submit);
@@ -265,7 +324,7 @@
       });
       bank.forEach(function (w, i) {
         pool.appendChild(h('button', { class: 'token', lang: 'en', disabled: done, onclick: function () {
-          line.classList.remove('is-wrong');
+          line.classList.remove('is-retry');
           chosen.push(bank.splice(i, 1)[0]); draw();
         } }, w));
       });
@@ -276,13 +335,24 @@
       var given = chosen.join(' ');
       if (ok) { done = true; line.classList.add('is-correct'); reset.disabled = true; draw(); api.attempt(true, given, task.answer); return; }
       if (api.attempt(false, given, task.answer)) {
-        line.classList.add('is-wrong');
-        bank = E.shuffledWords(task); chosen = []; draw();   // вторая попытка с начала
+        bank = bank.concat(chosen); chosen = [];
+        if (scaffolded) { chosen = [first]; bank.splice(bank.indexOf(first), 1); }
+        line.classList.add('is-retry'); draw();
       } else {
-        done = true; line.classList.add('is-wrong'); reset.disabled = true; draw();
+        done = true; line.classList.add('is-solution'); reset.disabled = true; draw();
       }
     });
-    reset.addEventListener('click', function () { bank = bank.concat(chosen); chosen = []; draw(); });
+    // Каркас: первое слово ставится на место
+    var first = task.answer.split(' ')[0], scaffolded = false;
+    api.onScaffold = function () {
+      scaffolded = true;
+      bank = bank.concat(chosen); chosen = [first]; bank.splice(bank.indexOf(first), 1); draw();
+    };
+    reset.addEventListener('click', function () {
+      bank = bank.concat(chosen); chosen = [];
+      if (scaffolded) { chosen = [first]; bank.splice(bank.indexOf(first), 1); }
+      draw();
+    });
     draw();
     return h('div', { class: 'order' }, line, pool, h('div', { class: 'row-gap' }, check, reset));
   }
@@ -760,6 +830,7 @@
       h('section', { class: 'greet' },
         h('h1', null, 'Сәлем, ' + p.name + '!'),
         h('p', { class: 'muted' }, 'Бүгінгі мақсат — бір қысқа сабақ. Тұрақты аз-аздан оқу — ең тиімді жол.')),
+      caseHomeCard(p),
       main,
       due > 0 && rec.kind !== 'review' ? h('section', { class: 'card card-pad review-card' },
         h('div', null, h('strong', null, '🔁 Қайталау: ' + due + ' сұрақ'),
@@ -896,7 +967,7 @@
           text: step.text,
           dontKnow: step.task.type === 'choice' && (step.phase === 'warmup' || step.phase === 'review'),
           lesson: run.lesson, ctxKey: run.ctxKey,
-          secondTry: true,
+          ladder: true,
           hint: step.hint || null,
           wrongNote: step.reviewId ? 'Бұл сұрақ ертең қайта шығады.' : 'Бұл тапсырма ертең қайталауға қосылады.',
           onResult: function (ok, ans, info) { recordResult(step, ok, ans, info); },
@@ -929,20 +1000,117 @@
       h('button', { class: 'btn btn-primary btn-block', onclick: nextStep }, 'Миссияны бастау →'));
   }
 
-  /* История → короткое правило → пример с разбором → попытка ученика. */
+  /*
+   * «Сначала загадка — потом правило».
+   * 1) несколько примеров с одной закономерностью и догадка ученика (без штрафа);
+   * 2) обязательно — прямое правило простым казахским, пример и разбор частей;
+   * 3) «Түсінбедім» — другой способ понять (простое объяснение, схема, сравнение, границы аналогии, проверка);
+   * 4) попытка ученика на новом примере с лесенкой подсказок.
+   * ex: { puzzle?, scene?, rule[], example, parts[], alt?, task }
+   */
+  function explainerView(ex, opts) {
+    var root = h('section', { class: 'explainer' });
+    var ruleShown = !ex.puzzle;
+
+    function puzzleBlock() {
+      var pz = ex.puzzle;
+      var after = h('div', { class: 'puzzle-after hidden', 'aria-live': 'polite' });
+      var btns = pz.options.map(function (o, i) {
+        var b = h('button', { class: 'option' }, o);
+        b.addEventListener('click', function () {
+          btns.forEach(function (x, j) { x.disabled = true; if (j === pz.answer) x.classList.add('is-correct'); });
+          if (i !== pz.answer) b.classList.add('is-guess');
+          after.appendChild(h('p', { class: 'puzzle-verdict' }, i === pz.answer ? '✓ Жақсы болжам!' : '🔎 Бұл болжам дәл емес — бұл қалыпты. Дұрыс заңдылық белгіленді.'));
+          after.appendChild(h('p', null, pz.after));
+          after.appendChild(h('button', { class: 'btn btn-primary btn-block', onclick: function () { this.disabled = true; ruleShown = true; draw(); } }, 'Ережені нақты көру →'));
+          after.classList.remove('hidden');
+        });
+        return b;
+      });
+      return h('div', { class: 'puzzle' },
+        h('div', { class: 'phase-label' }, '🧩 Алдымен — тілдік жұмбақ'),
+        h('p', null, pz.intro),
+        h('div', { class: 'evidence-grid' }, pz.examples.map(function (e, i) {
+          return h('div', { class: 'evidence' }, h('span', { class: 'evidence-no' }, String(i + 1)),
+            h('div', { lang: 'en', class: 'ex-en' }, e.en), h('div', { class: 'ex-kk' }, e.kk));
+        })),
+        h('h3', { class: 'task-prompt' }, pz.question),
+        h('div', { class: 'options' }, btns),
+        after);
+    }
+
+    function ruleBlock() {
+      var altBox = h('div', { class: 'alt-slot' });
+      var altBtn = ex.alt ? h('button', { class: 'btn btn-ghost btn-block not-clear' }, '🤔 Түсінбедім — басқаша түсіндіріңізші') : null;
+      if (altBtn) altBtn.addEventListener('click', function () {
+        altBtn.remove();
+        altBox.appendChild(altPanel(ex.alt));
+      });
+      return h('div', { class: 'rule-block' },
+        ex.scene ? h('p', { class: 'story-scene' }, ex.scene) : null,
+        h('div', { class: 'rule-card' },
+          h('div', { class: 'rule-card-label' }, '📐 Ереже'),
+          h('ul', { class: 'rule-list' }, ex.rule.map(function (r) { return h('li', null, r); }))),
+        h('div', { class: 'example big-example' }, h('div', { lang: 'en', class: 'ex-en' }, ex.example.en), h('div', { class: 'ex-kk' }, ex.example.kk)),
+        h('div', { class: 'parts' }, ex.parts.map(function (pt) {
+          return h('div', { class: 'part' }, h('span', { class: 'part-en', lang: 'en' }, pt.en), h('span', { class: 'part-kk' }, pt.kk));
+        })),
+        altBtn, altBox,
+        h('h3', { class: 'sub' }, '✍️ Енді өзіңіз'),
+        taskView(ex.task, { ladder: true, onResult: opts.onResult || function () {}, onNext: opts.onDone, nextLabel: opts.doneLabel || 'Жалғастыру →' }));
+    }
+
+    // Загадка строится один раз; правило добавляется под ней после ответа
+    function draw() {
+      if (!ruleShown || root.querySelector('.rule-block')) return;
+      var rb = ruleBlock();
+      root.appendChild(rb);
+      if (ex.puzzle && rb.scrollIntoView) rb.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'start' });
+    }
+    if (ex.puzzle) root.appendChild(puzzleBlock());
+    if (ruleShown) root.appendChild(ruleBlock());
+    return root;
+  }
+
+  function prefersReducedMotion() {
+    return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+
+  /* «Түсінбедім»: другой способ понять то же правило. */
+  function altPanel(alt) {
+    return h('div', { class: 'alt-panel' },
+      h('div', { class: 'alt-title' }, 'Басқаша айтқанда'),
+      h('p', { class: 'alt-simple' }, alt.simple),
+      alt.scheme ? schemeView(alt.scheme) : null,
+      alt.compare ? h('div', { class: 'compare' },
+        h('div', { class: 'compare-row' }, h('span', { class: 'compare-tag' }, 'ҚАЗ'), h('span', null, alt.compare.kk)),
+        h('div', { class: 'compare-row' }, h('span', { class: 'compare-tag en' }, 'ENG'), h('span', { lang: 'en' }, alt.compare.en)),
+        h('p', { class: 'small' }, alt.compare.note)) : null,
+      alt.limits ? h('p', { class: 'limits' }, h('strong', null, 'Бұл түсіндірменің шегі: '), alt.limits) : null,
+      alt.example ? h('div', { class: 'example' }, h('div', { lang: 'en', class: 'ex-en' }, alt.example.en), h('div', { class: 'ex-kk' }, alt.example.kk)) : null,
+      alt.check ? h('div', { class: 'alt-check' }, h('div', { class: 'phase-label' }, '✅ Түсінгеніңізді тексеріңіз'),
+        taskView(alt.check, { ladder: true, onResult: function () {}, onNext: function () {}, nextLabel: '✓ Түсінікті' })) : null);
+  }
+
+  /* Схема правила: «ячейки» предложения или линия времени. */
+  function schemeView(sc) {
+    if (sc.type === 'timeline') {
+      return h('div', { class: 'scheme timeline', 'aria-label': 'Уақыт сызығы' },
+        h('div', { class: 'tl-track' },
+          h('div', { class: 'tl-long' }, h('span', { lang: 'en' }, sc.long), h('small', null, 'созылып жатқан әрекет')),
+          h('div', { class: 'tl-point' }, h('span', { class: 'tl-bolt', 'aria-hidden': 'true' }, '⚡'), h('span', { lang: 'en' }, sc.point), h('small', null, 'кенет оқиға'))));
+    }
+    return h('div', { class: 'scheme slots' }, sc.rows.map(function (row) {
+      return h('div', { class: 'slot-row' }, row.map(function (cell) {
+        return h('div', { class: 'slot' }, h('span', { class: 'slot-t', lang: 'en' }, cell.t), cell.c ? h('span', { class: 'slot-c' }, cell.c) : null);
+      }));
+    }));
+  }
+
   function storyView(story) {
     return h('section', { class: 'story' },
-      h('div', { class: 'phase-label' }, '📜 Оқиға'),
-      h('p', { class: 'story-scene' }, story.scene),
-      h('h3', { class: 'sub' }, 'Ереже'),
-      h('ul', { class: 'rule-list' }, story.rule.map(function (r) { return h('li', null, r); })),
-      h('h3', { class: 'sub' }, 'Мысал'),
-      h('div', { class: 'example' }, h('div', { lang: 'en', class: 'ex-en' }, story.example.en), h('div', { class: 'ex-kk' }, story.example.kk)),
-      h('div', { class: 'parts' }, story.parts.map(function (pt) {
-        return h('div', { class: 'part' }, h('span', { class: 'part-en', lang: 'en' }, pt.en), h('span', { class: 'part-kk' }, pt.kk));
-      })),
-      h('h3', { class: 'sub' }, 'Енді өзіңіз'),
-      taskView(story.task, { secondTry: true, hint: story.task.hint, onResult: function () {}, onNext: nextStep, nextLabel: 'Жалғастыру →' }));
+      h('div', { class: 'phase-label' }, '📜 Күрделі тақырып'),
+      explainerView(story, { onDone: nextStep }));
   }
 
   function introView(lesson, ctxKey) {
@@ -975,6 +1143,178 @@
     var p = profile();
     var topic = p.interest === 'other' && p.otherTopic ? '«' + p.otherTopic + '»' : '«' + (FEA.contextNames[run.wantedCtx] || '') + '»';
     return 'Бұл сабақта ' + topic + ' тақырыбына арналған дайын мәтін әлі жоқ. Сондықтан «' + FEA.contextNames[run.ctxKey] + '» тақырыбындағы жалпы мәтін берілді. Сабақтың мақсаты мен күрделілігі өзгермейді.';
+  }
+
+  // ------------------------------------------------------------ ІС (демонстрационная миссия)
+  var cs = null;   // { c, v, phase: 'intro'|'tool'|'scene'|'unlock'|'finale', i }
+
+  function caseRecord(p, c) {
+    p.cases = p.cases || {};
+    return p.cases[c.id] || null;
+  }
+
+  function openCase(id) {
+    var p = profile();
+    var c = E.getCase(id);
+    var rec = caseRecord(p, c);
+    // Незавершённое прохождение продолжается с сохранённого места
+    var resume = rec && !rec.done && (rec.toolDone || rec.scene > 0);
+    var v = resume ? c.versions.filter(function (x) { return x.stage === rec.version; })[0] : E.caseVersionFor(p, c);
+    cs = { c: c, v: v, phase: 'intro', i: resume ? rec.scene : 0, toolDone: !!(resume && rec.toolDone) };
+    go('case');
+  }
+
+  function saveCase(extra) {
+    var p = profile();
+    p.cases = p.cases || {};
+    var old = p.cases[cs.c.id] || {};
+    p.cases[cs.c.id] = Object.assign({}, old, { version: cs.v.stage, scene: cs.i, toolDone: cs.toolDone, updatedAt: now() }, extra || {});
+    persist();
+  }
+
+  function routeView() {
+    var steps = [{ icon: '🧰', title: 'Тілдік құрал' }].concat(cs.v.scenes.map(function (sc) { return { icon: sc.icon, title: sc.title }; }), [{ icon: '🏁', title: 'Шешім' }]);
+    var current = cs.phase === 'intro' ? -1 : cs.phase === 'tool' ? 0 : cs.phase === 'finale' ? steps.length - 1 : cs.i + 1;
+    return h('ol', { class: 'route', 'aria-label': 'Іс маршруты' }, steps.map(function (st, k) {
+      var state = k < current || (cs.phase === 'unlock' && k === current) ? 'done' : k === current ? 'current' : 'locked';
+      return h('li', { class: 'route-step ' + state, 'aria-current': state === 'current' ? 'step' : null },
+        h('span', { class: 'route-dot', 'aria-hidden': 'true' }, state === 'done' ? '✓' : st.icon),
+        h('span', { class: 'route-title' }, st.title));
+    }));
+  }
+
+  function clueCard(clue, n) {
+    return h('div', { class: 'clue' },
+      h('div', { class: 'clue-tab' }, clue.label),
+      h('div', { class: clue.sign ? 'sign' : 'clue-text', lang: 'en' }, clue.lines.map(function (l) { return h(clue.sign ? 'div' : 'p', null, l); })),
+      glossary(clue.glossary));
+  }
+
+  function screenCase() {
+    var p = profile();
+    var c = cs.c, v = cs.v;
+    var head = h('header', { class: 'case-head' },
+      h('button', { class: 'icon-btn', 'aria-label': 'Істен шығу', onclick: function () { cs = null; go('home'); } }, '✕'),
+      h('div', { class: 'case-head-mid' },
+        h('div', { class: 'case-no' }, 'ІС ' + c.caseNo), h('div', { class: 'case-title' }, c.title)),
+      h('div', { class: 'case-ver small' }, stageLabel(v.stage)));
+    var body;
+
+    if (cs.phase === 'intro') {
+      var rec = caseRecord(p, c);
+      body = h('div', { class: 'case-file' },
+        h('div', { class: 'stamp' + (rec && rec.solved && rec.solved.length ? ' done' : '') }, rec && rec.solved && rec.solved.length ? 'ШЕШІЛДІ' : 'АШЫҚ ІС'),
+        h('h1', null, c.title),
+        h('p', { class: 'lead' }, c.intro),
+        h('div', { class: 'goal' }, h('span', { class: 'goal-label' }, '🎯 Тілдік мақсат'), h('p', null, c.goal)),
+        h('div', { class: 'version-card' },
+          h('div', { class: 'small muted' }, 'Сіздің нұсқаңыз (профиліңіздің оқу сатысы бойынша):'),
+          h('strong', null, v.label + ' · ' + stageLabel(v.stage)),
+          h('p', { class: 'small' }, v.supports),
+          h('div', { class: 'small muted' }, 'Басқа нұсқа таңдауға болады — сюжет пен мақсат бірдей, тек іздер мен көмек өзгереді:'),
+          h('div', { class: 'chips' }, c.versions.map(function (x) {
+            return h('button', { class: 'chip' + (x.stage === v.stage ? ' chip-on' : ''), 'aria-pressed': x.stage === v.stage ? 'true' : 'false', onclick: function () {
+              cs.v = x; cs.i = 0; cs.toolDone = false; render();
+            } }, x.label);
+          }))),
+        routeView(),
+        h('button', { class: 'btn btn-primary btn-block', onclick: function () {
+          cs.phase = cs.toolDone ? 'scene' : 'tool'; saveCase({ done: false }); render(); window.scrollTo(0, 0);
+        } }, cs.toolDone || cs.i > 0 ? 'Тергеуді жалғастыру →' : 'Істі ашу →'));
+    } else if (cs.phase === 'tool') {
+      body = h('div', null, routeView(),
+        h('div', { class: 'card card-pad' },
+          h('div', { class: 'phase-label' }, '🧰 Тергеушінің тілдік құралы'),
+          h('p', { class: 'muted small' }, 'Іздерді түсіну үшін алдымен бір тілдік құралды меңгерейік.'),
+          explainerView(v.explainer, { doneLabel: 'Бірінші ізге →', onDone: function () {
+            cs.toolDone = true; cs.phase = 'scene'; cs.i = 0; saveCase(); render(); window.scrollTo(0, 0);
+          } })));
+    } else if (cs.phase === 'scene') {
+      var sc = v.scenes[cs.i];
+      body = h('div', null, routeView(),
+        h('div', { class: 'card card-pad scene' },
+          h('div', { class: 'scene-place small muted' }, '📍 ' + sc.place),
+          h('h2', null, sc.icon + ' ' + sc.title),
+          clueCard(sc.clue),
+          h('div', { class: 'phase-label' }, '🕵️ Сіздің әрекетіңіз'),
+          taskView(E.caseSceneTask(sc), {
+            ladder: true,
+            wrongNote: 'Іс жалғасады. Бұл із ертең қайталауда тағы шығады.',
+            onResult: function (ok, ans, info) {
+              var t = now();
+              if (!ok) {
+                E.scheduleCaseMistake(p, c.id, v.stage, cs.i, t);
+                E.addMistake(p, { at: t, where: 'Іс ' + c.caseNo + ': ' + c.title + (info.final ? ' · кеңеспен табылды' : ''),
+                  prompt: sc.task.prompt + (sc.task.sentence ? ' ' + sc.task.sentence : ''),
+                  answer: sc.task.type === 'choice' ? sc.task.options[sc.task.answer] : sc.task.type === 'type' ? sc.task.answers[0] : sc.task.answer,
+                  explain: sc.task.explain });
+              }
+              persist();
+            },
+            onNext: function () {
+              // Улика решена: при возврате ученик продолжит со следующей
+              saveCase({ scene: Math.min(cs.i + 1, v.scenes.length - 1) });
+              cs.phase = 'unlock'; render(); window.scrollTo(0, 0);
+            },
+            nextLabel: 'Із ашылды →'
+          })));
+    } else if (cs.phase === 'unlock') {
+      var sc2 = v.scenes[cs.i];
+      var last = cs.i === v.scenes.length - 1;
+      body = h('div', null, routeView(),
+        h('div', { class: 'card card-pad unlock' },
+          h('div', { class: 'unlock-badge' }, '🔓 Жаңа мәлімет'),
+          h('p', { class: 'unlock-text' }, sc2.unlock),
+          h('button', { class: 'btn btn-primary btn-block', onclick: function () {
+            if (last) {
+              var old = (p.cases && p.cases[c.id]) || {};
+              var solved = (old.solved || []).filter(function (x) { return x !== v.stage; }).concat([v.stage]);
+              cs.phase = 'finale'; cs.i = 0; cs.toolDone = false;
+              saveCase({ done: true, completedAt: now(), solved: solved });
+            }
+            else { cs.i++; cs.phase = 'scene'; saveCase(); }
+            render(); window.scrollTo(0, 0);
+          } }, last ? 'Істің шешімі →' : 'Келесі із →')));
+    } else {
+      var idx = Math.max(0, c.versions.indexOf(v));
+      body = h('div', null, routeView(),
+        h('div', { class: 'card card-pad case-file finale' },
+          h('div', { class: 'stamp done' }, 'ІС ЖАБЫЛДЫ'),
+          h('h2', null, '🏁 Шешім'),
+          h('div', { class: 'clue-text', lang: 'en' }, v.finale.lines.map(function (l) { return h('p', null, l); })),
+          h('p', null, v.finale.kk),
+          h('div', { class: 'goal can-do' }, h('span', { class: 'goal-label' }, '✅ Енді сіз:'), h('p', null, v.canDo))),
+        h('div', { class: 'card card-pad' },
+          h('h2', null, '🔁 Осы тілдік құрал басқа тақырыпта'),
+          h('p', { class: 'muted small' }, 'Сол мақсат — басқа жағдай мен басқа әрекет:'),
+          h('div', { class: 'transfer-grid' }, c.transfer.map(function (t) {
+            return h('div', { class: 'transfer' }, h('div', { class: 'transfer-head' }, t.icon + ' ' + t.theme),
+              h('p', { class: 'small' }, t.action), h('div', { class: 'ex-en', lang: 'en' }, t.examples[idx] || t.examples[0]));
+          }))),
+        h('details', { class: 'card card-pad discussion' },
+          h('summary', null, '👨‍👩‍👧 Отбасымен талқылау (міндетті емес)'),
+          c.discussion.map(function (d) { return h('p', null, d); })),
+        h('div', { class: 'stack' },
+          h('button', { class: 'btn btn-primary btn-block', onclick: function () { cs = null; go('home'); } }, 'Басты бетке'),
+          h('button', { class: 'btn btn-ghost btn-block', onclick: function () { cs.phase = 'intro'; cs.i = 0; cs.toolDone = false; render(); window.scrollTo(0, 0); } }, 'Басқа нұсқамен қайта ойнау')));
+    }
+    return [head, storageBanner(), h('main', { class: 'page case-page' }, body)];
+  }
+
+  function caseHomeCard(p) {
+    return (FEA.cases || []).map(function (c) {
+      var rec = (p.cases || {})[c.id];
+      var v = E.caseVersionFor(p, c);
+      var inProgress = rec && !rec.done && (rec.toolDone || rec.scene > 0);
+      var status = inProgress ? 'Тергеу жалғасып жатыр' : rec && rec.solved && rec.solved.length ? '✓ Шешілді' : 'Жаңа іс';
+      return h('section', { class: 'case-card' },
+        h('div', { class: 'case-card-tab' }, 'АРНАЙЫ ІС ' + c.caseNo),
+        h('h2', null, '🕵️ ' + c.title),
+        h('p', { class: 'small' }, c.goal),
+        h('div', { class: 'case-card-foot' },
+          h('span', { class: 'small muted' }, status + ' · ' + v.label),
+          h('button', { class: 'btn btn-primary', onclick: function () { openCase(c.id); } }, inProgress ? 'Жалғастыру' : rec && rec.solved && rec.solved.length ? 'Қайта ашу' : 'Істі ашу')));
+    });
   }
 
   // ------------------------------------------------------------ НӘТИЖЕ
@@ -1081,6 +1421,12 @@
       h('section', { class: 'card card-pad' },
         h('h2', null, 'Деректер'),
         h('p', { class: 'small' }, '💾 Прогресс тек осы құрылғыда, осы браузерде сақталады. Басқа құрылғыға автоматты түрде көшпейді.'),
+        h('div', { class: 'backup-box' },
+          h('h3', { class: 'sub' }, 'Сақтық көшірме'),
+          h('p', { class: 'small muted' }, 'Файл тек сіздің құрылғыңызға жүктеледі. Ешқайда жіберілмейді.'),
+          h('div', { class: 'row-gap' },
+            h('button', { class: 'btn btn-secondary', onclick: downloadBackup }, '⬇️ Сақтық көшірме жасау'),
+            h('button', { class: 'btn btn-ghost', onclick: pickBackupFile }, '⬆️ Қалпына келтіру'))),
         h('button', { class: 'btn btn-ghost btn-block', onclick: function () {
           FEA.ui.confirmDialog({ title: 'Осы профильдің прогресін тазалау керек пе?', text: '«' + p.name + '» профилінің диагностикасы, сабақтары, қайталаулары мен қателері өшіріледі. Аты мен қызығушылығы қалады.', ok: 'Тазалау', danger: true })
             .then(function (yes) {
@@ -1103,6 +1449,11 @@
     return h('section', { class: 'card card-pad' },
       h('h2', null, '🗺️ ' + FEA.canDoTitle),
       h('p', { class: 'muted small' }, 'Әр орындалған миссиядан кейін ағылшынша не істей алатыныңыз. Бұл ұпай емес — нақты дағды.'),
+      (FEA.cases || []).filter(function (c) { var r = p.cases && p.cases[c.id]; return r && r.solved && r.solved.length; }).map(function (c) {
+        var solved = p.cases[c.id].solved;
+        var v = c.versions.filter(function (x) { return x.stage === solved[solved.length - 1]; })[0] || c.versions[0];
+        return h('div', { class: 'cando-skill cando-case' }, h('strong', null, '🕵️ Іс ' + c.caseNo + ': ' + c.title), h('ul', { class: 'cando-list' }, h('li', null, '✅ ' + v.canDo)));
+      }),
       E.SKILL_ORDER.map(function (s) {
         var done = E.lessonsForSkill(s).filter(function (l) { return p.lessons[l.id]; });
         var next = E.nextLessonFor(p, s);
@@ -1114,6 +1465,83 @@
             h('span', { class: 'small' }, '➡️ Келесі миссия: ', h('strong', null, E.missionFor(next, E.contextKeyFor(p)).title)),
             h('button', { class: 'btn btn-secondary btn-small', onclick: function () { startLesson(next.id); } }, 'Бастау')) : null);
       }));
+  }
+
+  // ------------------------------------------------------------ сақтық көшірме
+  function downloadBackup() {
+    var text = store.exportBackup(state);
+    var blob = new Blob([text], { type: 'application/json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'family-english-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+  }
+
+  function pickBackupFile() {
+    var input = h('input', { type: 'file', accept: 'application/json,.json', class: 'hidden' });
+    input.addEventListener('change', function () {
+      var f = input.files && input.files[0];
+      input.remove();
+      if (!f) return;
+      var reader = new FileReader();
+      reader.onload = function () { go('restore', { parsed: store.parseBackup(String(reader.result), state), fileName: f.name }); };
+      reader.onerror = function () { go('restore', { parsed: { ok: false, error: 'Файлды оқу мүмкін болмады.' }, fileName: f.name }); };
+      reader.readAsText(f);
+    });
+    document.body.appendChild(input);
+    input.click();
+  }
+
+  /* Предпросмотр восстановления: ничего не меняется без явного действия. */
+  function screenRestore() {
+    var parsed = route.params.parsed;
+    var back = h('button', { class: 'btn btn-ghost btn-block', onclick: function () { go(profile() ? 'progress' : 'welcome'); } }, 'Бас тарту — ештеңе өзгермейді');
+    if (!parsed || !parsed.ok) {
+      return page([h('section', { class: 'card card-pad' },
+        h('h1', null, 'Файлды қалпына келтіру мүмкін емес'),
+        h('p', null, parsed ? parsed.error : 'Файл таңдалмады.'),
+        h('p', { class: 'muted small' }, 'Құрылғыдағы деректер өзгерген жоқ.'),
+        back)]);
+    }
+    var news = parsed.summary.filter(function (x) { return x.status === 'new'; });
+    var conflicts = parsed.summary.filter(function (x) { return x.status !== 'new'; });
+    var statusText = { 'new': 'жаңа профиль — қосылады', 'same-id': 'бұл профиль құрылғыда бар', 'same-name': 'осы атпен профиль бар' };
+    return page([h('section', { class: 'card card-pad' },
+      h('p', { class: 'step-label' }, 'Қалпына келтіру · алдын ала қарау'),
+      h('h1', null, 'Файлда не бар?'),
+      h('p', { class: 'small muted' }, (route.params.fileName || '') + (parsed.exportedAt ? ' · ' + parsed.exportedAt.slice(0, 10) : '')),
+      h('div', { class: 'list' }, parsed.summary.map(function (x) {
+        return h('div', { class: 'list-row restore-row ' + x.status },
+          h('span', null, h('strong', null, x.name), h('span', { class: 'small muted' }, ' · ' + statusText[x.status])),
+          h('span', { class: 'small muted' }, x.lessons + ' сабақ · ' + x.reviews + ' қайталау · ' + x.mistakes + ' қате'));
+      })),
+      conflicts.length ? h('div', { class: 'banner banner-info' },
+        h('strong', null, 'Біріктіру туралы: '),
+        'бұл профильдер құрылғыда бұрыннан бар: ' + conflicts.map(function (x) { return x.name; }).join(', ') + '. ' +
+        'Қай прогресті сақтау керегін автоматты түрде анықтау мүмкін емес, сондықтан қауіпсіз біріктіруде олар өзгертілмейді. ' +
+        'Оларды файлдағы нұсқамен ауыстыру үшін ғана «Барлығын ауыстыру» керек — бұл құрылғыдағы қазіргі деректерді өшіреді.') : null,
+      h('div', { class: 'stack' },
+        news.length ? h('button', { class: 'btn btn-primary btn-block', onclick: function () {
+          var added = store.mergeNewProfiles(state, parsed);
+          persist();
+          FEA.ui.confirmDialog({ title: 'Қосылды', text: 'Жаңа профильдер: ' + added.join(', ') + '. Қазіргі профильдер өзгерген жоқ.', ok: 'Жақсы', cancel: 'Жабу' })
+            .then(function () { go(profile() ? 'progress' : 'profiles'); });
+        } }, '➕ Тек жаңа профильдерді қосу (' + news.length + ')') : h('p', { class: 'small muted' }, 'Файлда жаңа профиль жоқ: барлығы құрылғыда бар.'),
+        h('button', { class: 'btn btn-secondary btn-block', onclick: downloadBackup }, '⬇️ Алдымен қазіргі деректердің көшірмесін жасау'),
+        h('button', { class: 'btn btn-danger btn-block', onclick: function () {
+          FEA.ui.confirmDialog({ title: 'Барлық деректерді файлмен ауыстыру керек пе?',
+            text: 'Осы құрылғыдағы барлық профильдер мен прогресс файлдағы деректермен алмастырылады. Қазіргі деректерді қайтару мүмкін болмайды, егер алдымен көшірме жасамасаңыз.',
+            ok: 'Иә, ауыстыру', danger: true })
+            .then(function (yes) {
+              if (!yes) return;
+              state = parsed.data;
+              if (!state.profiles[state.activeProfileId]) state.activeProfileId = null;
+              persist();
+              go(startRoute());
+            });
+        } }, 'Барлығын файлмен ауыстыру'),
+        back))]);
   }
 
   function stageStepperConfirm(skill, redraw) {
@@ -1138,11 +1566,12 @@
   var screens = {
     welcome: screenWelcome, name: screenName, interest: screenInterest, profiles: screenProfiles,
     diagIntro: screenDiagIntro, diag: screenDiag, diagResult: screenDiagResult,
-    home: screenHome, skills: screenSkills, lesson: screenLesson, result: screenResult, progress: screenProgress
+    home: screenHome, skills: screenSkills, lesson: screenLesson, result: screenResult, progress: screenProgress,
+    'case': screenCase, restore: screenRestore
   };
 
   function render() {
-    var needsProfile = ['home', 'skills', 'progress', 'diagIntro', 'diag', 'diagResult', 'interest', 'lesson', 'result'];
+    var needsProfile = ['home', 'skills', 'progress', 'diagIntro', 'diag', 'diagResult', 'interest', 'lesson', 'result', 'case'];
     if (needsProfile.indexOf(route.name) !== -1 && !profile()) route = { name: startRoute(), params: {} };
     if (['home', 'skills', 'progress'].indexOf(route.name) !== -1) {
       var p = profile();
@@ -1150,6 +1579,7 @@
       else if (!p.stages || !p.diagnostic) route = { name: 'diagIntro', params: {} };
     }
     if (route.name === 'lesson' && !run) route = { name: 'home', params: {} };
+    if (route.name === 'case' && (!cs || !profile())) route = { name: 'home', params: {} };
     if (route.name === 'result' && !route.params.run) route = { name: 'home', params: {} };
     if (route.name === 'diag' && !diag) {
       diag = { i: 0, correct: { words: 0, grammar: 0, reading: 0 }, wrongInRow: { words: 0, grammar: 0, reading: 0 }, wrongIds: [], stoppedParts: [] };

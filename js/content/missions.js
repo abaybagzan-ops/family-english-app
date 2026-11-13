@@ -296,3 +296,165 @@ FEA.lessonExtras = {
 
 /* Идея «Мен не істей аламын»: тексты экрана прогресса. */
 FEA.canDoTitle = 'Мен не істей аламын';
+
+/*
+ * «Сначала загадка — потом правило» и «Түсінбедім» для историй сложных тем.
+ * puzzle — несколько примеров с одной закономерностью и вопрос «какое правило?»;
+ *          после любой догадки обязательно показывается прямое правило.
+ * alt    — другой способ понять: простое объяснение, схема, сравнение с казахским
+ *          (где оно корректно), границы аналогии, новый пример и проверка.
+ */
+(function () {
+  var X = FEA.lessonExtras;
+  function add(id, data) { Object.assign(X[id].story, data); }
+
+  add('s1-grammar', {
+    puzzle: {
+      intro: 'Сол жақ пен оң жақты салыстырыңыз:',
+      examples: [
+        { en: 'I run. → He runs.', kk: 'Мен жүгіремін. → Ол жүгіреді.' },
+        { en: 'We play. → She plays.', kk: 'Біз ойнаймыз. → Ол ойнайды.' },
+        { en: 'You work. → My mom works.', kk: 'Сен жұмыс істейсің. → Анам жұмыс істейді.' }
+      ],
+      question: 'Оң жақта етістікке не болды?',
+      options: ['he / she / my mom кезінде соңына -s қосылды', 'Барлық жерде -ing қосылды', 'Етістік мүлде өзгерген жоқ'],
+      answer: 0,
+      after: 'Байқағыш екенсіз. Енді ережені нақты айтайық.'
+    },
+    alt: {
+      simple: '-s — «ол» белгісі: бір адам не бір зат туралы әдет айтқанда, етістік соңына -s алады.',
+      scheme: { type: 'slots', rows: [[{ t: 'He / She / It', c: 'бір адам, бір зат' }, { t: 'run + s', c: 'етістік + -s' }, { t: 'every day', c: 'әдет' }], [{ t: 'I / You / We / They', c: 'қалғандары' }, { t: 'run', c: '-s жоқ' }, { t: 'every day', c: 'әдет' }]] },
+      compare: { kk: 'Ол жүгіреді.', en: 'He runs.', note: 'Қазақшада етістік әр жақта өзгереді (жүгіремін, жүгіресің, жүгіреді). Ағылшынша Present Simple-де тек «ол» үшін -s қосылады.' },
+      limits: 'Бұл ереже әдеттегі, қайталанатын әрекетке (Present Simple) қатысты. Өткен шақта -s жоқ: He ran.',
+      example: { en: 'My dad cooks on Sundays.', kk: 'Әкем жексенбі күндері тамақ пісіреді.' },
+      check: { type: 'choice', prompt: 'Бос орынға не келеді?', sentence: 'My sister ___ English every evening.', options: ['reads', 'read', 'reading'], answer: 0,
+        hints: ['My sister — бір адам ба?', 'Бір адам (she) туралы әдет: етістікке -s.', 'read + s'],
+        explain: 'My sister = she, әдет: reads.' }
+    }
+  });
+
+  add('s1-grammar-2', {
+    puzzle: {
+      intro: 'Сиқырлы бөлменің дауысы үш сөйлем айтты:',
+      examples: [
+        { en: 'There is a key on the table.', kk: 'Үстелде кілт бар.' },
+        { en: 'There are two keys on the table.', kk: 'Үстелде екі кілт бар.' },
+        { en: 'There is a map on the wall.', kk: 'Қабырғада карта бар.' }
+      ],
+      question: 'is пен are қашан ауысады?',
+      options: ['Бір зат — is, бірнеше зат — are', 'Үстелде — is, қабырғада — are', 'Ешқандай айырмашылық жоқ'],
+      answer: 0,
+      after: 'Енді ережені толық көрейік.'
+    },
+    alt: {
+      simple: 'There is / There are — ағылшынша «…бар» сөйлемінің басы. Не бар екенін, содан кейін қайда екенін айтамыз.',
+      scheme: { type: 'slots', rows: [[{ t: 'There is', c: 'бір зат' }, { t: 'a key', c: 'не?' }, { t: 'on the table', c: 'қайда?' }], [{ t: 'There are', c: 'бірнеше зат' }, { t: 'two keys', c: 'не?' }, { t: 'on the table', c: 'қайда?' }]] },
+      compare: { kk: 'Үстелде кілт бар.', en: 'There is a key on the table.', note: 'Қазақшада «қайда?» басында, «бар» соңында. Ағылшынша There is басында, «қайда?» соңында.' },
+      limits: 'Иелікті айту үшін (менде бар) There is емес, have/has қолданылады: I have a key.',
+      example: { en: 'There are three books in my bag.', kk: 'Сөмкемде үш кітап бар.' },
+      check: { type: 'choice', prompt: 'Бос орынға не келеді?', sentence: '___ a cat under the bed.', options: ['There is', 'There are', 'It is'], answer: 0,
+        hints: ['Неше мысық?', 'a cat — бір мысық.', 'There ... (бір зат)'],
+        explain: 'a cat — бір зат: There is.' }
+    }
+  });
+
+  add('s2-grammar', {
+    puzzle: {
+      intro: 'Үш сөйлемді салыстырыңыз:',
+      examples: [
+        { en: 'Dad was cooking when the phone rang.', kk: 'Телефон шырылдаған кезде, әкем тамақ пісіріп жатқан.' },
+        { en: 'The kids were playing when it started to rain.', kk: 'Жаңбыр жауа бастаған кезде, балалар ойнап жүрген.' },
+        { en: 'I was sleeping when the alarm rang.', kk: 'Оятқыш шырылдаған кезде, мен ұйықтап жатқанмын.' }
+      ],
+      question: 'Әр сөйлемде қай бөлік ұзақ созылған әрекетті көрсетеді?',
+      options: ['was / were + -ing бөлігі', 'when-нен кейінгі бөлік', 'Сөйлемнің соңғы сөзі'],
+      answer: 0,
+      after: 'Дұрыс бағыт. Енді ережені нақты көрейік.'
+    },
+    alt: {
+      simple: 'Кино кадрын елестетіңіз: фонда бір әрекет жүріп жатыр (was reading), сол сәтте кадрда кенет оқиға болады (went out).',
+      scheme: { type: 'timeline', long: 'was reading', point: 'went out' },
+      compare: { kk: 'Кітап оқып отырған кезде, жарық сөніп қалды.', en: 'I was reading when the light went out.', note: '«-ып отырған/жатқан кезде» көбіне was/were + -ing-ке сәйкес келеді, бірақ әрдайым емес.' },
+      limits: 'Кино аналогиясы әрекеттердің ретін ғана көрсетеді. Кейбір етістіктер -ing түрінде сирек қолданылады: I knew («I was knowing» емес).',
+      example: { en: 'She was walking home when she found a key.', kk: 'Үйге келе жатқанда, ол кілт тауып алды.' },
+      check: { type: 'choice', prompt: 'Бос орынға не келеді?', sentence: 'We ___ TV when Grandma called.', options: ['were watching', 'was watching', 'watched'], answer: 0,
+        hints: ['Теледидар көру — фон ба, кенет оқиға ма?', 'We үшін was па, were ме?', 'were w _ _ _ _ _ _ _'],
+        explain: 'Фон, we үшін were: were watching.' }
+    }
+  });
+
+  add('s2-grammar-2', {
+    puzzle: {
+      intro: 'Ғарыш жарысының комментаторы сөздерді қалай өзгертеді?',
+      examples: [
+        { en: 'fast → faster', kk: 'жылдам → жылдамырақ' },
+        { en: 'small → smaller', kk: 'кішкентай → кішірек' },
+        { en: 'beautiful → more beautiful', kk: 'әдемі → әдемірек' }
+      ],
+      question: 'Қашан -er, қашан more қолданылады?',
+      options: ['Қысқа сөзге -er, ұзын сөзге more', 'Әрқашан more', 'Әрқашан -er'],
+      answer: 0,
+      after: 'Жақсы. Енді салыстыру сөйлемінің толық ережесін көрейік.'
+    },
+    alt: {
+      simple: '-er немесе more — «-рақ/-рек» сияқты; than — «-нан/-нен» сияқты.',
+      scheme: { type: 'slots', rows: [[{ t: 'The Falcon', c: 'бірінші зат' }, { t: 'is faster', c: '-рақ' }, { t: 'than', c: '-нан' }, { t: 'the Snow Leopard', c: 'екінші зат' }]] },
+      compare: { kk: '«Сұңқар» «Барыстан» жылдамырақ.', en: 'The Falcon is faster than the Snow Leopard.', note: 'Қазақшада салыстырылатын зат («Барыстан») сын есімнің алдында тұрады; ағылшынша than-нан кейін, сөйлемнің соңында.' },
+      limits: 'Ерекше сөздер ережеге бағынбайды: good → better, bad → worse.',
+      example: { en: 'This road is longer than that road.', kk: 'Бұл жол ана жолдан ұзынырақ.' },
+      check: { type: 'choice', prompt: 'Бос орынға не келеді?', sentence: 'My new phone is ___ than my old phone.', options: ['better', 'gooder', 'more good'], answer: 0,
+        hints: ['good — ерекше сөз бе?', 'good ережеге бағынбайды.', 'b _ _ _ _ _'],
+        explain: 'good → better (ерекше түр).' }
+    }
+  });
+
+  add('s3-grammar', {
+    puzzle: {
+      intro: 'Риверстоун жаңалықтарынан үш сөйлем:',
+      examples: [
+        { en: 'Although it was raining, she flew.', kk: 'Жаңбыр жауып тұрғанына қарамастан, ол ұшты.' },
+        { en: 'Despite the rain, she flew.', kk: 'Жаңбырға қарамастан, ол ұшты.' },
+        { en: 'Despite being tired, she helped.', kk: 'Шаршағанына қарамастан, ол көмектесті.' }
+      ],
+      question: 'although пен despite сөздерінен кейін не келеді?',
+      options: ['although — толық сөйлем, despite — зат есім немесе -ing', 'Екеуінен кейін де толық сөйлем', 'despite — толық сөйлем, although — зат есім'],
+      answer: 0,
+      after: 'Дәл таптыңыз. Енді ережені бекітейік.'
+    },
+    alt: {
+      simple: 'Тексеру тәсілі: бос орыннан кейін етістігі бар толық сөйлем (кім + не істеді) тұрса — although. Тек зат есім не -ing тұрса — despite.',
+      scheme: { type: 'slots', rows: [[{ t: 'Although', c: '' }, { t: 'she was tired,', c: 'толық сөйлем' }, { t: 'she helped.', c: 'негізгі сөйлем' }], [{ t: 'Despite', c: '' }, { t: 'the rain,', c: 'зат есім' }, { t: 'she flew.', c: 'негізгі сөйлем' }]] },
+      compare: { kk: 'Шаршағанына қарамастан, ол көмектесті.', en: 'Although she was tired, she helped. / Despite being tired, she helped.', note: 'Қазақшада бір сөз — «қарамастан». Ағылшынша құрылымға қарай екі түрлі сөз керек.' },
+      limits: 'despite the fact that + толық сөйлем де мүмкін, бірақ ол ұзынырақ әрі ресмирек.',
+      example: { en: 'Although the bus was late, we arrived on time.', kk: 'Автобус кешіккеніне қарамастан, біз уақытында жеттік.' },
+      check: { type: 'choice', prompt: 'Бос орынға не келеді?', sentence: '___ the noise, I fell asleep.', options: ['Despite', 'Although', 'Because'], answer: 0,
+        hints: ['Бос орыннан кейін не тұр: толық сөйлем бе, әлде зат есім бе?', 'the noise — зат есім, етістік жоқ.', 'D _ _ _ _ _ _'],
+        explain: 'the noise — зат есім: Despite.' }
+    }
+  });
+
+  add('s3-grammar-2', {
+    puzzle: {
+      intro: 'Детективтің хаттамасынан үш сөйлем:',
+      examples: [
+        { en: 'The crown was stolen.', kk: 'Тәж ұрланды.' },
+        { en: 'The bread is made at home.', kk: 'Нан үйде пісіріледі.' },
+        { en: 'The windows were cleaned.', kk: 'Терезелер тазаланды.' }
+      ],
+      question: 'Бұл сөйлемдерде не ортақ?',
+      options: ['be + етістіктің 3-түрі: назар затта', 'Барлығы қазіргі шақта', 'Әрекетті жасаған адам аталған'],
+      answer: 0,
+      after: 'Иә. Енді ережені толық көрейік.'
+    },
+    alt: {
+      simple: 'Хаттаманы елестетіңіз: кім жасағаны белгісіз, сондықтан сөйлем заттан басталады.',
+      scheme: { type: 'slots', rows: [[{ t: 'The crown', c: 'зат' }, { t: 'was', c: 'be' }, { t: 'stolen', c: 'V3' }, { t: '(by …)', c: 'кім? — қажет болса' }]] },
+      compare: { kk: 'Тәж ұрланды.', en: 'The crown was stolen.', note: 'Қазақшада ырықсыз етіс жұрнақпен жасалады (ұр-лан-ды). Ағылшынша екі бөлік керек: was + stolen.' },
+      limits: 'Барлық сөйлемді Passive-ке айналдыру міндетті емес. Кім істегені маңызды болса, әдеттегі сөйлем жақсырақ: The thief stole the crown.',
+      example: { en: 'The door was opened at night.', kk: 'Есік түнде ашылды.' },
+      check: { type: 'choice', prompt: 'Бос орынға не келеді?', sentence: 'These photos ___ in 1990.', options: ['were taken', 'was taken', 'took'], answer: 0,
+        hints: ['Суреттер өзі түсірді ме?', 'These photos — көпше: was па, were ме?', 'were t _ _ _ _'],
+        explain: 'Көпше, өткен шақ: were taken.' }
+    }
+  });
+})();

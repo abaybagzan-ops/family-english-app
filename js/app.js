@@ -28,7 +28,7 @@
     var p = profile();
     if (!p) return Object.keys(state.profiles).length ? 'profiles' : 'welcome';
     if (!p.interest) return 'interest';
-    if (!p.stages) return 'diagIntro';
+    if (!p.stages || !p.diagnostic) return 'diagIntro';
     return 'home';
   }
 
@@ -47,7 +47,10 @@
     var p = profile();
     return h('header', { class: 'topbar' },
       h('div', { class: 'brand' }, h('span', { class: 'brand-mark', html: LOGO_SVG }), h('span', null, 'Отбасылық ағылшын')),
-      p ? h('button', { class: 'chip chip-profile', onclick: function () { go('progress'); }, 'aria-label': 'Профиль және баптаулар' }, '👤 ' + p.name) : null
+      p ? h('button', { class: 'chip chip-profile', onclick: function () {
+        // Пока настройка профиля не закончена, кнопка ведёт к списку профилей (можно выбрать другой)
+        go(p.interest && p.stages && p.diagnostic ? 'progress' : 'profiles');
+      }, 'aria-label': 'Профиль және баптаулар' }, '👤 ' + p.name) : null
     );
   }
 
@@ -79,33 +82,63 @@
 
   // ------------------------------------------------------------ задания
   /*
-   * Универсальный показ задания (диагностика, урок, повторение).
-   * opts: { onResult(ok, answerText), onNext, nextLabel, text, dontKnow, wrongNote, lesson, ctxKey }
+   * Универсальный показ задания (диагностика, урок, повторение, история).
+   * opts: { onResult(firstTryOk, answerText, info), onNext, nextLabel, text, dontKnow, wrongNote,
+   *         secondTry, hint, lesson, ctxKey }
+   * secondTry: после первой ошибки — подсказка и ещё одна попытка (в диагностике выключено).
+   * В результат (точность) идёт только первая попытка; при ошибке задание уходит в повторение.
    */
+  function genericHint(task, opts) {
+    if (opts.text || task.text || task.sign) return 'Жауап мәтінде бар. Сұрақтағы негізгі сөзді мәтіннен тауып, сол сөйлемді қайта оқыңыз.';
+    if (task.type === 'order') return 'Ағылшын сөйлемі көбіне «кім — не істейді — қалғаны» ретімен құрылады.';
+    if (task.type === 'type' && task.sentence) return 'Сөйлемге қайта қараңыз: кім туралы айтылған және әрекет қашан болған?';
+    if (task.type === 'type') return 'Сабақтағы жаңа сөздерді еске түсіріп, жазылуын тексеріңіз.';
+    return 'Бұл нұсқа сәйкес келмейді. Қалған нұсқаларды сұрақпен тағы бір рет салыстырыңыз.';
+  }
+
   function taskView(task, opts) {
     var answered = false;
+    var attempts = 0;
     var feedback = h('div', { class: 'feedback-slot', 'aria-live': 'polite' });
+    var hintBox = h('div', { class: 'hint-box hidden', role: 'status' });
     var nextBtn = h('button', { class: 'btn btn-primary btn-block hidden', onclick: function () { opts.onNext(); } }, opts.nextLabel || 'Келесі →');
 
-    function finish(ok, answerText, correctText) {
+    function complete(firstTryOk, finalOk, answerText, correctText) {
       if (answered) return;
       answered = true;
-      opts.onResult(ok, answerText);
-      feedback.appendChild(h('div', { class: 'feedback ' + (ok ? 'feedback-ok' : 'feedback-bad') },
-        h('div', { class: 'feedback-head' }, ok ? '✓ Дұрыс!' : '○ Ештеңе етпейді — бірге қарайық.'),
-        !ok && correctText ? h('div', { class: 'feedback-answer' }, 'Дұрыс жауап: ', h('strong', { lang: 'en' }, correctText)) : null,
+      hintBox.classList.add('hidden');
+      opts.onResult(firstTryOk, answerText, { final: finalOk, attempts: attempts });
+      var head = finalOk ? (firstTryOk ? '✓ Дұрыс!' : '✓ Дұрыс! Екінші әрекетте таптыңыз.') : '○ Ештеңе етпейді — бірге қарайық.';
+      feedback.appendChild(h('div', { class: 'feedback ' + (finalOk ? 'feedback-ok' : 'feedback-bad') },
+        h('div', { class: 'feedback-head' }, head),
+        !finalOk && correctText ? h('div', { class: 'feedback-answer' }, 'Дұрыс жауап: ', h('strong', { lang: 'en' }, correctText)) : null,
         task.explain ? h('p', { class: 'feedback-explain' }, task.explain) : null,
-        !ok ? h('p', { class: 'feedback-note' }, opts.wrongNote || 'Бұл тақырып кейін қайталауға қосылады.') : null
+        !firstTryOk ? h('p', { class: 'feedback-note' }, finalOk ? 'Бұл тапсырма бекіту үшін кейін тағы бір рет шығады.' : (opts.wrongNote || 'Бұл тақырып кейін қайталауға қосылады.')) : null
       ));
       nextBtn.classList.remove('hidden');
       nextBtn.focus();
     }
 
+    /* Попытка ответа. Возвращает true, если дана вторая попытка. */
+    function attempt(ok, answerText, correctText) {
+      if (answered) return false;
+      attempts++;
+      if (ok) { complete(attempts === 1, true, answerText, correctText); return false; }
+      if (opts.secondTry && attempts === 1) {
+        hintBox.textContent = '💡 ' + (opts.hint || task.hint || genericHint(task, opts)) + ' Тағы бір рет байқап көріңіз.';
+        hintBox.classList.remove('hidden');
+        return true;
+      }
+      complete(false, false, answerText, correctText);
+      return false;
+    }
+
+    var api = { attempt: attempt, complete: complete };
     var body;
-    if (task.type === 'choice') body = choiceBody(task, finish, opts);
-    else if (task.type === 'type') body = typeBody(task, finish, opts);
-    else if (task.type === 'order') body = orderBody(task, finish);
-    else if (task.type === 'match') body = matchBody(task, finish, opts);
+    if (task.type === 'choice') body = choiceBody(task, api, opts);
+    else if (task.type === 'type') body = typeBody(task, api);
+    else if (task.type === 'order') body = orderBody(task, api);
+    else if (task.type === 'match') body = matchBody(task, api, opts);
     else body = h('p', null, 'Белгісіз тапсырма түрі.');
 
     return h('section', { class: 'task' },
@@ -113,6 +146,7 @@
       h('h2', { class: 'task-prompt' }, task.prompt),
       taskMaterial(task),
       body,
+      hintBox,
       feedback,
       nextBtn
     );
@@ -135,35 +169,33 @@
       items.map(function (g) { return h('span', { class: 'gloss' }, h('span', { lang: 'en' }, g.en), ' — ', g.kk); }));
   }
 
-  function choiceBody(task, finish, opts) {
+  function choiceBody(task, api, opts) {
     var opts2 = E.shuffledOptions(task);
     var buttons = [];
     var correctText = task.options[task.answer];
     var wrap = h('div', { class: 'options' });
+    function lockAll() {
+      buttons.forEach(function (x, i) { x.disabled = true; if (opts2[i].correct) x.classList.add('is-correct'); });
+      if (dk) dk.disabled = true;
+    }
     opts2.forEach(function (o) {
       var b = h('button', { class: 'option', lang: /[a-z]/i.test(o.text) && !/[а-яәіңғүұқөһ]/i.test(o.text) ? 'en' : null }, o.text);
       b.addEventListener('click', function () {
-        buttons.forEach(function (x) { x.disabled = true; });
-        if (o.correct) b.classList.add('is-correct');
-        else {
-          b.classList.add('is-wrong');
-          buttons.forEach(function (x, i) { if (opts2[i].correct) x.classList.add('is-correct'); });
-        }
-        if (dk) dk.disabled = true;
-        finish(o.correct, o.text, correctText);
+        if (o.correct) { lockAll(); api.attempt(true, o.text, correctText); return; }
+        b.classList.add('is-wrong'); b.disabled = true;
+        if (!api.attempt(false, o.text, correctText)) lockAll();
       });
       buttons.push(b);
       wrap.appendChild(b);
     });
     var dk = opts.dontKnow ? h('button', { class: 'btn btn-ghost btn-small', onclick: function () {
-      buttons.forEach(function (x, i) { x.disabled = true; if (opts2[i].correct) x.classList.add('is-correct'); });
-      dk.disabled = true;
-      finish(false, '(білмеймін)', correctText);
+      lockAll();
+      api.complete(false, false, '(білмеймін)', correctText);
     } }, 'Білмеймін') : null;
     return [wrap, dk ? h('div', { class: 'dk-row' }, dk) : null];
   }
 
-  function typeBody(task, finish) {
+  function typeBody(task, api) {
     var input = h('input', { class: 'text-input', type: 'text', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', lang: 'en', 'aria-label': 'Жауабыңыз', placeholder: task.sentence && task.sentence.indexOf('___') !== -1 ? 'Бос орынға келетін сөзді жазыңыз…' : 'Жауапты жазыңыз…' });
     var check = h('button', { class: 'btn btn-primary', disabled: true }, 'Тексеру');
     var dk = h('button', { class: 'btn btn-ghost' }, 'Білмеймін');
@@ -175,8 +207,13 @@
       input.classList.add('is-hint');
       input.focus();
     }
+    function lock(ok) {
+      input.disabled = true; check.disabled = true; dk.disabled = true;
+      input.classList.remove('is-hint');
+      input.classList.add(ok ? 'is-correct' : 'is-wrong');
+    }
     function submit() {
-      if (!input.value.trim()) return;
+      if (!input.value.trim() || input.disabled) return;
       // Кириллица в английском ответе — это раскладка, а не ошибка: подсказка и новая попытка
       if (E.hasCyrillic(input.value)) { showHint('Ағылшын әріптерімен жазыңыз'); return; }
       var ok = E.checkTyped(task, input.value);
@@ -187,10 +224,12 @@
         return;
       }
       layoutHint.classList.add('hidden');
-      input.classList.remove('is-hint');
-      input.disabled = true; check.disabled = true; dk.disabled = true;
-      input.classList.add(ok ? 'is-correct' : 'is-wrong');
-      finish(ok, input.value, task.answers[0]);
+      if (ok) { lock(true); api.attempt(true, input.value, task.answers[0]); return; }
+      if (api.attempt(false, input.value, task.answers[0])) {
+        input.classList.add('is-hint');
+        input.select();
+        input.focus();
+      } else lock(false);
     }
     input.addEventListener('input', function () {
       check.disabled = !input.value.trim();
@@ -200,14 +239,14 @@
     input.addEventListener('keydown', function (e) { if (e.key === 'Enter') submit(); });
     check.addEventListener('click', submit);
     dk.addEventListener('click', function () {
-      input.disabled = true; check.disabled = true; dk.disabled = true;
-      finish(false, '(білмеймін)', task.answers[0]);
+      lock(false);
+      api.complete(false, false, '(білмеймін)', task.answers[0]);
     });
     setTimeout(function () { input.focus(); }, 30);
     return h('div', { class: 'type-row' }, input, layoutHint, h('div', { class: 'row-gap' }, check, dk));
   }
 
-  function orderBody(task, finish) {
+  function orderBody(task, api) {
     var bank = E.shuffledWords(task);
     var chosen = [];
     var line = h('div', { class: 'order-line', 'aria-label': 'Сіздің сөйлеміңіз' });
@@ -226,25 +265,29 @@
       });
       bank.forEach(function (w, i) {
         pool.appendChild(h('button', { class: 'token', lang: 'en', disabled: done, onclick: function () {
+          line.classList.remove('is-wrong');
           chosen.push(bank.splice(i, 1)[0]); draw();
         } }, w));
       });
       check.disabled = done || bank.length > 0;
     }
     check.addEventListener('click', function () {
-      done = true;
       var ok = E.checkOrder(task, chosen);
-      line.classList.add(ok ? 'is-correct' : 'is-wrong');
-      reset.disabled = true;
-      draw();
-      finish(ok, chosen.join(' '), task.answer);
+      var given = chosen.join(' ');
+      if (ok) { done = true; line.classList.add('is-correct'); reset.disabled = true; draw(); api.attempt(true, given, task.answer); return; }
+      if (api.attempt(false, given, task.answer)) {
+        line.classList.add('is-wrong');
+        bank = E.shuffledWords(task); chosen = []; draw();   // вторая попытка с начала
+      } else {
+        done = true; line.classList.add('is-wrong'); reset.disabled = true; draw();
+      }
     });
     reset.addEventListener('click', function () { bank = bank.concat(chosen); chosen = []; draw(); });
     draw();
     return h('div', { class: 'order' }, line, pool, h('div', { class: 'row-gap' }, check, reset));
   }
 
-  function matchBody(task, finish, opts) {
+  function matchBody(task, api, opts) {
     var pairs = E.matchPairs(opts.lesson, opts.ctxKey);
     var left = E.shuffle(pairs), right = E.shuffle(pairs);
     var selected = null, matched = 0, mistakes = 0;
@@ -269,7 +312,7 @@
           b.disabled = true; b.classList.add('is-correct');
           matched++; clearSel();
           status.textContent = 'Жарайсыз! Қалғанын да сәйкестендіріңіз.';
-          if (matched === pairs.length) finish(mistakes === 0, '', '');
+          if (matched === pairs.length) api.complete(mistakes === 0, true, '', '');
         } else {
           mistakes++;
           b.classList.add('shake');
@@ -313,9 +356,90 @@
     ]);
   }
 
+  function findProfileByName(name) {
+    var n = String(name || '').trim().toLowerCase();
+    var ids = Object.keys(state.profiles).filter(function (id) { return state.profiles[id].name.trim().toLowerCase() === n; });
+    return ids.length ? ids[0] : null;
+  }
+
+  function openProfile(id) {
+    state.activeProfileId = id;
+    persist();
+    go(startRoute());
+  }
+
+  function createProfile(name, level) {
+    var np = store.newProfile(name, level);
+    state.profiles[np.id] = np;
+    state.activeProfileId = np.id;
+    persist();
+    go('interest');
+  }
+
+  function initials(name) { return String(name).trim().charAt(0).toUpperCase(); }
+
+  function screenWho() {
+    var otherBox = h('div', { class: 'other-box hidden' });
+    var input = h('input', { class: 'text-input', type: 'text', maxlength: '30', placeholder: 'Атыңызды жазыңыз', 'aria-label': 'Атыңыз' });
+    var level = 'A0';
+    var levelBtns = FEA.levelPresets.map(function (lp) {
+      var b = h('button', { class: 'chip' + (lp.id === level ? ' chip-on' : ''), 'aria-pressed': lp.id === level ? 'true' : 'false' }, 'болжамды ' + lp.id);
+      b.addEventListener('click', function () {
+        level = lp.id;
+        levelBtns.forEach(function (x, i) { var on = FEA.levelPresets[i].id === level; x.classList.toggle('chip-on', on); x.setAttribute('aria-pressed', on ? 'true' : 'false'); });
+      });
+      return b;
+    });
+    var go2 = h('button', { class: 'btn btn-primary btn-block', disabled: true }, 'Жалғастыру');
+    input.addEventListener('input', function () { go2.disabled = !input.value.trim(); });
+    function submitOther() {
+      var name = input.value.trim().slice(0, 30);
+      if (!name) return;
+      var existing = findProfileByName(name);
+      if (existing) {
+        FEA.ui.confirmDialog({ title: '«' + name + '» профилі бар', text: 'Бұл құрылғыда осындай профиль бар. Соны ашайық па? Оның прогресі сақталады.', ok: 'Профильді ашу' })
+          .then(function (yes) { if (yes) openProfile(existing); });
+        return;
+      }
+      createProfile(name, level);
+    }
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') submitOther(); });
+    go2.addEventListener('click', submitOther);
+    otherBox.appendChild(input);
+    otherBox.appendChild(h('p', { class: 'muted small' }, 'Бастапқы деңгей (кейін өзгертуге болады):'));
+    otherBox.appendChild(h('div', { class: 'chips' }, levelBtns));
+    otherBox.appendChild(go2);
+
+    var cards = FEA.familyProfiles.map(function (fp) {
+      var existing = findProfileByName(fp.name);
+      return h('button', { class: 'family-card' + (existing ? ' existing' : ''), onclick: function () {
+        if (existing) openProfile(existing); else createProfile(fp.name, fp.level);
+      } },
+        h('span', { class: 'avatar', 'aria-hidden': 'true' }, initials(fp.name)),
+        h('span', { class: 'family-name' }, fp.name),
+        h('span', { class: 'family-level' }, 'болжамды ' + fp.level),
+        existing ? h('span', { class: 'family-open' }, 'Бар профиль — ашу') : null);
+    });
+    var otherCard = h('button', { class: 'family-card other', onclick: function () {
+      otherBox.classList.remove('hidden'); input.focus();
+    } }, h('span', { class: 'avatar', 'aria-hidden': 'true' }, '＋'), h('span', { class: 'family-name' }, 'Басқа профиль'), h('span', { class: 'family-level' }, 'атын жазу'));
+
+    return page([
+      h('section', { class: 'card card-pad' },
+        h('p', { class: 'step-label' }, '1-қадам / 3'),
+        h('h1', null, 'Кім оқиды?'),
+        h('p', { class: 'muted' }, 'Өз профиліңізді таңдаңыз. Деңгей — болжамды бағдар ғана, ресми бағалау емес. Кейін өзгертуге болады. Тегі, телефон, пошта керек емес.'),
+        h('div', { class: 'family-grid' }, cards, otherCard),
+        otherBox,
+        Object.keys(state.profiles).length ? h('button', { class: 'btn btn-ghost btn-block', onclick: function () { go('profiles'); } }, 'Барлық профильдер тізімі') : null
+      )
+    ]);
+  }
+
   function screenName() {
     var p = profile();
     var editing = route.params.edit && p;
+    if (!editing) return screenWho();
     var input = h('input', { class: 'text-input', type: 'text', maxlength: '30', placeholder: 'Мысалы: Айгерім', 'aria-label': 'Атыңыз немесе жүгіну', value: editing ? p.name : '' });
     var next = h('button', { class: 'btn btn-primary btn-block', disabled: !editing }, editing ? 'Сақтау' : 'Жалғастыру');
     input.addEventListener('input', function () { next.disabled = !input.value.trim(); });
@@ -334,13 +458,10 @@
     setTimeout(function () { input.focus(); }, 30);
     return page([
       h('section', { class: 'card card-pad' },
-        h('p', { class: 'step-label' }, editing ? 'Профиль' : '1-қадам / 3'),
-        h('h1', null, 'Сізге қалай жүгінейік?'),
-        h('p', { class: 'muted' }, 'Атыңызды жазыңыз немесе төменнен қарапайым жүгінуді таңдаңыз. Тегі мен басқа жеке деректер керек емес.'),
+        h('p', { class: 'step-label' }, 'Профиль'),
+        h('h1', null, 'Профиль атын өзгерту'),
+        h('p', { class: 'muted' }, 'Тегі мен басқа жеке деректер керек емес.'),
         input,
-        h('div', { class: 'chips' }, FEA.nameChips.map(function (c) {
-          return h('button', { class: 'chip', onclick: function () { input.value = c; next.disabled = false; input.focus(); } }, c);
-        })),
         next,
         editing ? h('button', { class: 'btn btn-ghost btn-block', onclick: function () { go('progress'); } }, 'Артқа') : null
       )
@@ -361,7 +482,7 @@
       return h('button', { class: 'chip', onclick: function () { topicInput.value = t; } }, t);
     })));
     otherBox.appendChild(topicInput);
-    otherBox.appendChild(h('p', { class: 'muted small' }, 'Бұл нұсқада бөлек тақырыптарға арналған мәтіндер әлі аз. Әзірге сабақтарда күнделікті өмір туралы мәтіндер беріледі.'));
+    otherBox.appendChild(h('p', { class: 'muted small' }, 'Өз тақырыбыңызға арналған мәтіндер автоматты түрде жасалмайды. Дайын мәтін болмаса, сабақта жалпы мәтін беріледі — бұл сабақтың басында көрсетіледі.'));
 
     function pick(id) {
       selected = id;
@@ -374,7 +495,7 @@
       p.interest = selected;
       p.otherTopic = selected === 'other' ? topicInput.value.trim().slice(0, 40) : '';
       persist();
-      go(editing ? 'progress' : (p.stages ? 'home' : 'diagIntro'));
+      go(editing ? 'progress' : startRoute());
     });
 
     return page([
@@ -384,7 +505,8 @@
         h('p', { class: 'muted' }, 'Қызығушылық мәтіндердің тақырыбын, мысалдарды және тақырыптық сөздердің бір бөлігін өзгертеді. Сабақтардың реті мен күрделілігі өзгермейді.'),
         h('div', { class: 'interest-grid' }, FEA.interests.map(function (it) {
           var c = h('button', { class: 'interest-card' + (selected === it.id ? ' selected' : ''), 'aria-pressed': selected === it.id ? 'true' : 'false', onclick: function () { pick(it.id); } },
-            h('span', { class: 'interest-icon', 'aria-hidden': 'true' }, it.icon), h('span', null, it.title));
+            h('span', { class: 'interest-icon', 'aria-hidden': 'true' }, it.icon),
+            h('span', { class: 'interest-text' }, h('span', null, it.title), it.desc ? h('span', { class: 'interest-desc' }, it.desc) : null));
           cards[it.id] = c;
           return c;
         })),
@@ -404,9 +526,10 @@
         ids.length ? h('div', { class: 'list' }, ids.map(function (id) {
           var p = state.profiles[id];
           return h('button', { class: 'list-item', onclick: function () { state.activeProfileId = id; persist(); go(startRoute()); } },
-            h('span', null, '👤 ' + p.name), h('span', { class: 'muted small' }, p.interest ? interestMeta(p.interest).title : 'баптау аяқталмаған'));
+            h('span', null, '👤 ' + p.name + (p.presetLevel ? ' · болжамды ' + p.presetLevel : '')),
+            h('span', { class: 'muted small' }, p.interest && interestMeta(p.interest) ? interestMeta(p.interest).title : 'баптау аяқталмаған'));
         })) : h('p', { class: 'empty' }, 'Әзірге профиль жоқ.'),
-        h('button', { class: 'btn btn-primary btn-block', onclick: function () { state.activeProfileId = null; persist(); go('name'); } }, '＋ Жаңа профиль')
+        h('button', { class: 'btn btn-primary btn-block', onclick: function () { go('name'); } }, '＋ Жаңа профиль немесе отбасы мүшесін таңдау')
       )
     ]);
   }
@@ -414,18 +537,27 @@
   // ------------------------------------------------------------ ДИАГНОСТИКА
   var diag = null;
 
+  function ensureStages(p) {
+    if (!p.stages) p.stages = p.presetLevel ? FEA.stagesFromLevel(p.presetLevel) : { words: 0, grammar: 0, reading: 0 };
+  }
+
   function screenDiagIntro() {
+    var p = profile();
+    ensureStages(p);
     return page([
       h('section', { class: 'card card-pad' },
         h('p', { class: 'step-label' }, '3-қадам / 3'),
         h('h1', null, 'Қысқа диагностика'),
+        h('div', { class: 'banner banner-info' },
+          h('strong', null, 'Қазіргі бастапқы деңгей' + (p.presetLevel ? ' (болжамды ' + p.presetLevel + ')' : '') + ':'),
+          h('div', null, E.SKILL_ORDER.map(function (s) { return skillMeta(s).title + ' — ' + stageLabel(p.stages[s]); }).join(' · '))),
         h('p', null, '15 қысқа сұрақ: 5 — сөздер, 5 — грамматика, 5 — оқу. Әр бөлімде сұрақтар біртіндеп қиындай береді.'),
         h('ul', { class: 'hero-list' },
           h('li', null, 'Білмесеңіз, «Білмеймін» батырмасын басыңыз — бұл қалыпты жағдай.'),
           h('li', null, 'Қате үшін ешқандай айып жоқ. Әр жауаптан кейін қысқа түсіндірме шығады.'),
           h('li', null, 'Нәтиже — тек болжамды бастапқы деңгей. Ол сабақтар барысында нақтыланады.')),
         h('button', { class: 'btn btn-primary btn-block', onclick: function () { startDiag(); } }, 'Диагностиканы бастау'),
-        h('button', { class: 'btn btn-ghost btn-block', onclick: function () { skipDiag(); } }, 'Диагностикасыз, ең бастапқы сатыдан бастау')
+        h('button', { class: 'btn btn-ghost btn-block', onclick: function () { skipDiag(); } }, 'Диагностикасыз, осы деңгейден бастау')
       )
     ]);
   }
@@ -437,8 +569,8 @@
 
   function skipDiag() {
     var p = profile();
-    p.diagnostic = { date: new Date().toISOString(), skipped: true, correct: null, suggested: { words: 0, grammar: 0, reading: 0 } };
-    p.stages = { words: 0, grammar: 0, reading: 0 };
+    ensureStages(p);
+    p.diagnostic = { date: new Date().toISOString(), skipped: true, correct: null, suggested: null };
     persist();
     go('diagResult');
   }
@@ -501,8 +633,9 @@
     var t = now();
     var suggested = {};
     E.SKILL_ORDER.forEach(function (s) { suggested[s] = E.diagStage(diag.correct[s]); });
+    ensureStages(p);
+    // Уровень НЕ меняется: ученик подтверждает предложение на следующем экране
     p.diagnostic = { date: new Date(t).toISOString(), skipped: false, correct: diag.correct, suggested: suggested };
-    p.stages = Object.assign({}, suggested);
     diag.wrongIds.forEach(function (id) {
       var d = FEA.diagnostic.filter(function (x) { return x.id === id; })[0];
       E.scheduleReview(p, id + '-r', t);
@@ -535,18 +668,29 @@
   function screenDiagResult() {
     var p = profile();
     var d = p.diagnostic;
+    var sug = d && !d.skipped && d.suggested ? d.suggested : null;
+    var differs = sug ? E.SKILL_ORDER.filter(function (s) { return sug[s] !== p.stages[s]; }) : [];
     return page([
       h('section', { class: 'card card-pad' },
-        h('h1', null, d && d.skipped ? 'Бастапқы саты таңдалды' : 'Болжамды бастапқы деңгей'),
+        h('h1', null, d && d.skipped ? 'Бастапқы деңгей сақталды' : 'Диагностика нәтижесі'),
         h('p', { class: 'muted' }, d && d.skipped
-          ? 'Диагностика өткізілмеді, сондықтан ең бастапқы сатыдан бастаймыз. Төменде өзгертуге болады.'
-          : 'Бұл — қысқа тексерудің алдын ала нәтижесі. Әр дағды бөлек көрсетілген. Деңгей алғашқы сабақтарда нақтыланады.'),
+          ? 'Диагностика өткізілмеді. Профиль бойынша берілген болжамды деңгей сақталды. Төменде өзгертуге болады.'
+          : 'Бұл — қысқа тексерудің алдын ала нәтижесі, әр дағды бөлек. Деңгейіңіз өзіңіз растағанда ғана өзгереді.'),
+        differs.length > 1 ? h('button', { class: 'btn btn-secondary btn-block', onclick: function () {
+          differs.forEach(function (s) { p.stages[s] = sug[s]; }); persist(); render();
+        } }, 'Барлық ұсынысты қабылдау') : null,
         h('div', { class: 'skill-results' }, E.SKILL_ORDER.map(function (s) {
           var sm = skillMeta(s);
+          var diff = sug && sug[s] !== p.stages[s];
           return h('div', { class: 'skill-result skill-' + s },
             h('div', { class: 'skill-result-head' }, h('span', { class: 'skill-icon', 'aria-hidden': 'true' }, sm.icon), h('strong', null, sm.title),
               d && d.correct ? h('span', { class: 'muted small' }, d.correct[s] + ' / 5 дұрыс') : null),
-            stageStepper(s));
+            h('div', { class: 'muted small' }, 'Қазіргі саты:'),
+            stageStepper(s, function () { render(); }),
+            sug ? h('div', { class: 'suggest' + (diff ? ' diff' : '') },
+              diff ? [h('span', null, 'Диагностика ұсынады: ', h('strong', null, stageLabel(sug[s])), ' (' + stageMeta(sug[s]).cefrHint + ')'),
+                h('button', { class: 'btn btn-secondary btn-small', onclick: function () { p.stages[s] = sug[s]; persist(); render(); } }, 'Қабылдау')]
+                : h('span', null, '✓ Диагностика қазіргі сатымен сәйкес келеді.')) : null);
         })),
         h('p', { class: 'muted small' }, FEA.cefrDisclaimer),
         h('p', { class: 'muted small' }, 'Тым жеңіл немесе тым қиын көрінсе, «Жеңілірек» не «Қиынырақ» батырмасымен өзіңіз таңдаңыз.'),
@@ -572,10 +716,17 @@
         done ? h('span', { class: 'done-badge' }, '✓ Өтілді') : null),
       h('h3', { class: 'lesson-title' }, lesson.title),
       h('p', { class: 'muted' }, lesson.goal),
+      themeLine(lesson, opts.ctxKey),
       h('div', { class: 'lesson-card-foot' },
         h('span', { class: 'muted small' }, '⏱ 5–10 минут'),
         h('button', { class: 'btn ' + (opts.big ? 'btn-primary' : 'btn-secondary'), onclick: function () { startLesson(lesson.id, opts.ctxKey); } },
           opts.label || (done ? 'Қайталау' : 'Бастау'))));
+  }
+
+  function themeLine(lesson, ctxKey) {
+    var c = E.contextFor(lesson, ctxKey || E.contextKeyFor(profile()));
+    return h('p', { class: 'small theme-line' + (c.fallback ? ' fallback' : '') },
+      (c.fallback ? '📄 Жалпы мәтін: ' : '🎨 Сіздің тақырыбыңыз: ') + FEA.contextNames[c.key]);
   }
 
   function screenHome() {
@@ -596,7 +747,7 @@
     } else {
       var other = E.SKILL_ORDER.map(function (s) { return E.lessonFor(p.stages[s], s); }).filter(Boolean)[0];
       var ctxUsed = other && p.lessons[other.id] ? p.lessons[other.id].contextsUsed : [];
-      var altCtx = Object.keys(FEA.contextNames).filter(function (k) { return ctxUsed.indexOf(k) === -1; })[0];
+      var altCtx = other ? Object.keys(other.contexts).filter(function (k) { return ctxUsed.indexOf(k) === -1; })[0] : null;
       main = h('section', { class: 'card card-pad' },
         h('h2', null, 'Жарайсыз! Ағымдағы сабақтар өтілді'),
         h('p', { class: 'muted' }, 'Бүгін қайталайтын сұрақ жоқ. Сабақты жаңа мәтінмен қайталауға немесе «Прогресс» бетінде келесі сатыны таңдауға болады.'),
@@ -653,8 +804,10 @@
   function startLesson(lessonId, ctxKey) {
     var p = profile();
     var lesson = E.getLesson(lessonId);
-    var ctx = ctxKey || E.contextKeyFor(p);
-    run = { mode: 'lesson', lesson: lesson, ctxKey: ctx, steps: E.buildLessonSteps(lesson, ctx, p, now()), i: 0, results: [], mistakes: [] };
+    var wanted = ctxKey || E.contextKeyFor(p);
+    var c = E.contextFor(lesson, wanted);
+    run = { mode: 'lesson', lesson: lesson, ctxKey: c.key, ctxFallback: c.fallback, wantedCtx: wanted,
+      steps: E.buildLessonSteps(lesson, c.key, p, now()), i: 0, results: [], mistakes: [], newReviews: 0 };
     go('lesson');
   }
 
@@ -666,19 +819,24 @@
     go('lesson');
   }
 
-  function recordResult(step, ok, answerText) {
+  /* ok — верно с первой попытки; info.final — верно в итоге (в т.ч. со второй попытки). */
+  function recordResult(step, ok, answerText, info) {
     var p = profile();
     var t = now();
+    info = info || { final: ok };
     run.results.push({ phase: step.phase, ok: ok, reviewId: step.reviewId || null });
     if (step.reviewId) E.applyReview(p, step.reviewId, ok, t);
+    if (!ok && !step.reviewId && run.mode === 'lesson' && step.task.type !== 'match') {
+      if (E.scheduleMistake(p, run.lesson.id, run.ctxKey, step.phase, step.idx, t)) run.newReviews++;
+    }
     if (!ok && step.task.type !== 'match') {
       var correct = step.task.type === 'choice' ? step.task.options[step.task.answer]
         : step.task.type === 'type' ? step.task.answers[0] : step.task.answer;
       var m = {
         at: t,
-        where: run.lesson ? run.lesson.title : 'Қайталау',
+        where: (run.lesson ? run.lesson.title : 'Қайталау') + (info.final ? ' · екінші әрекетте дұрыс' : ''),
         prompt: step.task.prompt + (step.task.sentence ? ' ' + step.task.sentence : ''),
-        given: answerText,
+        given: info.final ? '' : answerText,
         answer: correct,
         explain: step.task.explain
       };
@@ -722,22 +880,26 @@
     var title = run.mode === 'lesson' ? run.lesson.title : 'Қайталау';
     var content;
 
-    if (step.kind === 'intro') content = introView(run.lesson, run.ctxKey);
+    if (step.kind === 'mission') content = missionView(run.lesson, run.ctxKey);
+    else if (step.kind === 'story') content = storyView(step.story);
+    else if (step.kind === 'intro') content = introView(run.lesson, run.ctxKey);
     else if (step.kind === 'text') content = h('section', null,
       h('h2', { class: 'task-prompt' }, 'Мәтінді оқыңыз'),
       h('p', { class: 'muted small' }, 'Алдымен негізгі ойды түсінуге тырысыңыз. Әр сөзді аудару міндетті емес.'),
       textCard(step.text, false),
       h('button', { class: 'btn btn-primary btn-block', onclick: nextStep }, 'Сұрақтарға көшу →'));
     else {
-      var phaseLabel = { warmup: '🔁 Еске түсіру', review: '🔁 Қайталау', core: '✏️ Жаттығу', context: '📖 Мәтін бойынша' }[step.phase];
+      var phaseLabel = { warmup: '🔁 Алдымен еске түсірейік', review: '🔁 Қайталау', core: '✏️ Жаттығу', context: '📖 Мәтін бойынша' }[step.phase];
       content = h('div', null,
         h('div', { class: 'phase-label' }, phaseLabel),
         taskView(step.task, {
           text: step.text,
           dontKnow: step.task.type === 'choice' && (step.phase === 'warmup' || step.phase === 'review'),
           lesson: run.lesson, ctxKey: run.ctxKey,
-          wrongNote: step.reviewId ? 'Бұл сұрақ ертең қайта шығады.' : 'Бұл тақырып сабақтан кейін қайталауға қосылады.',
-          onResult: function (ok, ans) { recordResult(step, ok, ans); },
+          secondTry: true,
+          hint: step.hint || null,
+          wrongNote: step.reviewId ? 'Бұл сұрақ ертең қайта шығады.' : 'Бұл тапсырма ертең қайталауға қосылады.',
+          onResult: function (ok, ans, info) { recordResult(step, ok, ans, info); },
           onNext: nextStep,
           nextLabel: run.i === run.steps.length - 1 ? 'Аяқтау ✓' : 'Келесі →'
         }));
@@ -756,6 +918,33 @@
     ];
   }
 
+  function missionView(lesson, ctxKey) {
+    var m = E.missionFor(lesson, ctxKey);
+    return h('section', { class: 'mission' },
+      h('div', { class: 'mission-badge' }, '🎯 Миссия · ' + skillMeta(lesson.skill).title),
+      h('h2', { class: 'mission-title' }, m.title),
+      h('p', { class: 'mission-scene' }, m.scene),
+      m.canDo ? h('div', { class: 'goal' }, h('span', { class: 'goal-label' }, 'Миссиядан кейін:'), h('p', null, m.canDo)) : null,
+      h('p', { class: 'muted small' }, 'Шамамен 5–10 минут. Қате болса — подсказка және тағы бір әрекет беріледі.'),
+      h('button', { class: 'btn btn-primary btn-block', onclick: nextStep }, 'Миссияны бастау →'));
+  }
+
+  /* История → короткое правило → пример с разбором → попытка ученика. */
+  function storyView(story) {
+    return h('section', { class: 'story' },
+      h('div', { class: 'phase-label' }, '📜 Оқиға'),
+      h('p', { class: 'story-scene' }, story.scene),
+      h('h3', { class: 'sub' }, 'Ереже'),
+      h('ul', { class: 'rule-list' }, story.rule.map(function (r) { return h('li', null, r); })),
+      h('h3', { class: 'sub' }, 'Мысал'),
+      h('div', { class: 'example' }, h('div', { lang: 'en', class: 'ex-en' }, story.example.en), h('div', { class: 'ex-kk' }, story.example.kk)),
+      h('div', { class: 'parts' }, story.parts.map(function (pt) {
+        return h('div', { class: 'part' }, h('span', { class: 'part-en', lang: 'en' }, pt.en), h('span', { class: 'part-kk' }, pt.kk));
+      })),
+      h('h3', { class: 'sub' }, 'Енді өзіңіз'),
+      taskView(story.task, { secondTry: true, hint: story.task.hint, onResult: function () {}, onNext: nextStep, nextLabel: 'Жалғастыру →' }));
+  }
+
   function introView(lesson, ctxKey) {
     var w = E.lessonWords(lesson, ctxKey);
     function wordTile(x, theme) {
@@ -768,8 +957,10 @@
     return h('section', null,
       h('div', { class: 'goal' }, h('span', { class: 'goal-label' }, '🎯 Сабақтың мақсаты'), h('p', null, lesson.goal)),
       lesson.prereq ? h('p', { class: 'banner banner-info' }, lesson.prereq) : null,
+      run && run.ctxFallback ? h('p', { class: 'banner banner-info' }, fallbackNote()) : null,
       h('h2', { class: 'task-prompt' }, lesson.title),
-      lesson.explain.map(function (para) { return h('p', null, para); }),
+      lesson.story ? h('p', { class: 'muted small' }, 'Ережені жоғарыдағы оқиғадан көрдіңіз. Енді жаңа сөздер мен мысалдар.')
+        : lesson.explain.map(function (para) { return h('p', null, para); }),
       h('h3', { class: 'sub' }, 'Мысалдар'),
       h('div', { class: 'examples' }, lesson.examples.map(function (ex) {
         return h('div', { class: 'example' }, h('div', { lang: 'en', class: 'ex-en' }, ex.en), h('div', { class: 'ex-kk' }, ex.kk));
@@ -778,6 +969,12 @@
       h('div', { class: 'word-grid' }, w.core.map(function (x) { return wordTile(x, false); }), w.theme.map(function (x) { return wordTile(x, true); })),
       w.theme.length ? h('p', { class: 'muted small' }, '🎨 Түспен белгіленген сөздер — сіз таңдаған тақырыптан.') : null,
       h('button', { class: 'btn btn-primary btn-block', onclick: nextStep }, 'Жаттығуларға көшу →'));
+  }
+
+  function fallbackNote() {
+    var p = profile();
+    var topic = p.interest === 'other' && p.otherTopic ? '«' + p.otherTopic + '»' : '«' + (FEA.contextNames[run.wantedCtx] || '') + '»';
+    return 'Бұл сабақта ' + topic + ' тақырыбына арналған дайын мәтін әлі жоқ. Сондықтан «' + FEA.contextNames[run.ctxKey] + '» тақырыбындағы жалпы мәтін берілді. Сабақтың мақсаты мен күрделілігі өзгермейді.';
   }
 
   // ------------------------------------------------------------ НӘТИЖЕ
@@ -791,13 +988,15 @@
     return page([
       h('section', { class: 'card card-pad result' },
         h('div', { class: 'result-icon', 'aria-hidden': 'true' }, '✓'),
-        h('h1', null, isLesson ? 'Сабақ аяқталды!' : 'Қайталау аяқталды!'),
+        h('h1', null, isLesson ? 'Миссия орындалды!' : 'Қайталау аяқталды!'),
         isLesson ? h('p', { class: 'muted' }, '«' + r.lesson.title + '» — ', h('strong', null, 'өтілді деп белгіленді.')) : null,
+        isLesson && r.lesson.canDo ? h('div', { class: 'goal can-do' }, h('span', { class: 'goal-label' }, '✅ Енді сіз:'), h('p', null, r.lesson.canDo)) : null,
         h('p', { class: 'result-score' }, 'Бірінші әрекеттен дұрыс: ', h('strong', null, s.correct + ' / ' + s.total)),
         h('p', { class: 'muted small' }, s.total && s.correct / s.total < 0.6
           ? 'Бұл тақырып әлі жаңа — бұл қалыпты. Қайталау оны бекітуге көмектеседі.'
           : 'Жақсы нәтиже. Бірнеше күннен кейінгі қайталау оны есте берік сақтауға көмектеседі.'),
-        isLesson ? h('p', { class: 'small' }, '🔁 Бұл сабақтың сұрақтары ертеңнен бастап қайталауға қосылды.') : null),
+        isLesson ? h('p', { class: 'small' }, '🔁 Бұл сабақтың сұрақтары ертеңнен бастап қайталауға қосылды.') : null,
+        isLesson && r.newReviews ? h('p', { class: 'small' }, '📌 Қате кеткен ' + r.newReviews + ' тапсырма ертең қайталауда қайта шығады.') : null),
       h('section', { class: 'card card-pad' },
         h('h2', null, 'Қателер және түсіндірме'),
         lessonMistakes.length ? h('div', { class: 'mistake-list' }, lessonMistakes.map(mistakeItem))
@@ -850,6 +1049,8 @@
         }),
         h('p', { class: 'muted small' }, FEA.cefrDisclaimer)),
 
+      canDoSection(p),
+
       h('section', { class: 'card card-pad' },
         h('h2', null, 'Өтілген сабақтар'),
         completed.length ? h('div', { class: 'list' }, completed.map(function (x) {
@@ -884,8 +1085,9 @@
           FEA.ui.confirmDialog({ title: 'Осы профильдің прогресін тазалау керек пе?', text: '«' + p.name + '» профилінің диагностикасы, сабақтары, қайталаулары мен қателері өшіріледі. Аты мен қызығушылығы қалады.', ok: 'Тазалау', danger: true })
             .then(function (yes) {
               if (!yes) return;
-              var fresh = store.newProfile(p.name);
+              var fresh = store.newProfile(p.name, p.presetLevel);
               fresh.id = p.id; fresh.interest = p.interest; fresh.otherTopic = p.otherTopic;
+              if (!fresh.stages) fresh.stages = Object.assign({}, p.stages);
               state.profiles[p.id] = fresh; persist(); go('diagIntro');
             });
         } }, 'Осы профильдің прогресін тазалау'),
@@ -894,6 +1096,24 @@
             .then(function (yes) { if (!yes) return; store.clearAll(); state = store.load(); go('welcome'); });
         } }, 'Осы құрылғыдағы барлық деректерді өшіру'))
     ], 'progress');
+  }
+
+  /* Идея «Мен не істей аламын»: практические результаты пройденных миссий и следующая миссия по каждому навыку. */
+  function canDoSection(p) {
+    return h('section', { class: 'card card-pad' },
+      h('h2', null, '🗺️ ' + FEA.canDoTitle),
+      h('p', { class: 'muted small' }, 'Әр орындалған миссиядан кейін ағылшынша не істей алатыныңыз. Бұл ұпай емес — нақты дағды.'),
+      E.SKILL_ORDER.map(function (s) {
+        var done = E.lessonsForSkill(s).filter(function (l) { return p.lessons[l.id]; });
+        var next = E.nextLessonFor(p, s);
+        return h('div', { class: 'cando-skill skill-' + s },
+          h('div', { class: 'skill-result-head' }, h('span', { class: 'skill-icon', 'aria-hidden': 'true' }, skillMeta(s).icon), h('strong', null, skillMeta(s).title)),
+          done.length ? h('ul', { class: 'cando-list' }, done.map(function (l) { return h('li', null, '✅ ' + (l.canDo || l.title)); }))
+            : h('p', { class: 'empty small' }, 'Әзірге орындалған миссия жоқ.'),
+          next ? h('div', { class: 'cando-next' },
+            h('span', { class: 'small' }, '➡️ Келесі миссия: ', h('strong', null, E.missionFor(next, E.contextKeyFor(p)).title)),
+            h('button', { class: 'btn btn-secondary btn-small', onclick: function () { startLesson(next.id); } }, 'Бастау')) : null);
+      }));
   }
 
   function stageStepperConfirm(skill, redraw) {
@@ -927,7 +1147,7 @@
     if (['home', 'skills', 'progress'].indexOf(route.name) !== -1) {
       var p = profile();
       if (!p.interest) route = { name: 'interest', params: {} };
-      else if (!p.stages) route = { name: 'diagIntro', params: {} };
+      else if (!p.stages || !p.diagnostic) route = { name: 'diagIntro', params: {} };
     }
     if (route.name === 'lesson' && !run) route = { name: 'home', params: {} };
     if (route.name === 'result' && !route.params.run) route = { name: 'home', params: {} };

@@ -46,15 +46,16 @@ FEA.storage = (function () {
     return 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   }
 
-  function newProfile(name) {
+  function newProfile(name, presetLevel) {
     return {
       id: newId(),
       name: name,
+      presetLevel: presetLevel || null, // предварительный ориентир (A0, A1, A2, B1–B2)
       interest: null,
       otherTopic: '',
       createdAt: new Date().toISOString(),
       diagnostic: null,          // { date, correct: {words, grammar, reading}, suggested: {...} }
-      stages: null,              // текущие ступени по навыкам, меняет только ученик
+      stages: presetLevel ? FEA.stagesFromLevel(presetLevel) : null, // меняет только ученик
       lessons: {},               // id -> { completedAt, times, lastAccuracy, bestAccuracy, contextsUsed: [] }
       reviews: {},               // id -> { box, due, added, correct, wrong, lastAt }
       mistakes: [],              // последние ошибки

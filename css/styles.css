@@ -196,6 +196,35 @@ button { font: inherit; color: inherit; }
 .interest-card.selected { border-color: var(--accent); background: var(--accent-soft); }
 .interest-icon { font-size: 1.6rem; }
 .other-box { margin-bottom: 8px; }
+.interest-text { display: flex; flex-direction: column; gap: 2px; }
+.interest-desc { font-weight: 400; font-size: 0.88rem; color: var(--muted); }
+.chip-on { background: var(--accent-soft); border-color: var(--accent); font-weight: 600; }
+
+/* ---------- семейные профили */
+.family-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 14px 0; }
+@media (min-width: 560px) { .family-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.family-card {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center;
+  min-height: 132px; padding: 14px 8px; border-radius: 16px;
+  border: 2px solid var(--line); background: var(--card); cursor: pointer;
+}
+.family-card:hover { border-color: var(--teal); }
+.family-card.existing { border-color: var(--teal); background: var(--teal-soft); }
+.family-card.other { border-style: dashed; }
+.avatar {
+  width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 1.3rem;
+}
+.family-name { font-weight: 700; font-size: 1.05rem; line-height: 1.2; overflow-wrap: anywhere; }
+.family-level { font-size: 0.85rem; color: var(--muted); }
+.family-open { font-size: 0.8rem; font-weight: 700; color: var(--teal); }
+
+/* ---------- предложение диагностики и тема урока */
+.suggest { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: var(--ok-soft); font-size: 0.93rem; }
+.suggest.diff { background: var(--amber-soft); }
+.theme-line { margin: 0 0 8px; color: var(--teal); }
+.theme-line.fallback { color: var(--muted); }
 
 /* ---------- lists */
 .list { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
@@ -369,3 +398,21 @@ button { font: inherit; color: inherit; }
   body { font-size: 18px; }
   .page { padding-top: 24px; }
 }
+
+/* ---------- квест: миссия, история, подсказка, «мен не істей аламын» */
+.mission-badge { display: inline-block; background: var(--accent-soft); color: var(--ink); border-radius: 999px; padding: 4px 12px; font-size: 0.88rem; font-weight: 600; }
+.mission-title { font-size: 1.35rem; margin: 10px 0 6px; }
+.mission-scene { font-size: 1.05rem; }
+.story-scene { background: var(--plum-soft); border-radius: 14px; padding: 12px 16px; font-size: 1.02rem; }
+.rule-list { margin: 4px 0 8px; padding-left: 1.2em; }
+.rule-list li { margin: 4px 0; }
+.parts { display: grid; gap: 6px; margin: 8px 0 12px; }
+.part { display: flex; gap: 10px; flex-wrap: wrap; align-items: baseline; padding: 6px 10px; border-left: 4px solid var(--teal); background: var(--bg); border-radius: 0 10px 10px 0; }
+.part-en { font-weight: 700; }
+.part-kk { color: var(--muted); }
+.hint-box { background: var(--amber-soft); border: 1px solid var(--amber); border-radius: 12px; padding: 10px 14px; margin: 10px 0; }
+.can-do { text-align: left; margin-top: 12px; }
+.cando-skill { border-left: 6px solid var(--skill); border-radius: 12px; padding: 10px 12px; margin-bottom: 12px; background: var(--card); border-top: 1px solid var(--line); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.cando-list { margin: 4px 0 8px; padding-left: 0; list-style: none; }
+.cando-list li { margin: 4px 0; }
+.cando-next { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }

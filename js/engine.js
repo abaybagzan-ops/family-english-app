@@ -12,7 +12,22 @@ FEA.engine = (function () {
 
   // ---------- Индексы контента
   var lessonsById = {};
-  FEA.lessons.forEach(function (l) { lessonsById[l.id] = l; });
+  FEA.lessons.forEach(function (l) {
+    lessonsById[l.id] = l;
+    // Квест-слой (миссия, практический результат, история, подсказки) из missions.js
+    var x = (FEA.lessonExtras || {})[l.id] || {};
+    if (x.mission && !l.mission) l.mission = x.mission;
+    if (x.canDo && !l.canDo) l.canDo = x.canDo;
+    if (x.story && !l.story) l.story = x.story;
+    if (x.hints && !l.hints) l.hints = x.hints;
+  });
+
+  /* Миссия урока с учётом темы. */
+  function missionFor(lesson, ctxKey) {
+    var m = lesson.mission || { title: lesson.title, scene: lesson.goal };
+    var scene = m.contexts && m.contexts[ctxKey] ? m.contexts[ctxKey] : m.scene;
+    return { title: m.title, scene: scene, canDo: lesson.canDo || '' };
+  }
 
   var reviewItems = {};   // id -> item (+ skill, stage, source)
   FEA.lessons.forEach(function (l) {
@@ -26,10 +41,18 @@ FEA.engine = (function () {
   });
 
   function getLesson(id) { return lessonsById[id] || null; }
-  function lessonFor(stage, skill) { return lessonsById['s' + stage + '-' + skill] || null; }
+  function byOrder(a, b) { return (a.stage - b.stage) || ((a.order || 1) - (b.order || 1)); }
+  /* Все уроки ступени по навыку, по порядку прохождения. */
+  function lessonsAt(stage, skill) {
+    return FEA.lessons.filter(function (l) { return l.stage === stage && l.skill === skill; }).sort(byOrder);
+  }
+  function lessonFor(stage, skill) { return lessonsAt(stage, skill)[0] || null; }
   function lessonsForSkill(skill) {
-    return FEA.lessons.filter(function (l) { return l.skill === skill; })
-      .sort(function (a, b) { return a.stage - b.stage; });
+    return FEA.lessons.filter(function (l) { return l.skill === skill; }).sort(byOrder);
+  }
+  /* Первый непройденный урок ступени по навыку. */
+  function nextLessonFor(profile, skill) {
+    return lessonsAt(profile.stages[skill], skill).filter(function (l) { return !profile.lessons[l.id]; })[0] || null;
   }
 
   // ---------- Утилиты
@@ -133,8 +156,18 @@ FEA.engine = (function () {
     return it ? it.context : 'everyday';
   }
 
+  /*
+   * Текст урока для интереса. Если для интереса нет варианта, берётся общий
+   * вариант урока (defaultContext, иначе everyday) и fallback = true.
+   */
+  function contextFor(lesson, ctxKey) {
+    if (lesson.contexts[ctxKey]) return { key: ctxKey, ctx: lesson.contexts[ctxKey], fallback: false };
+    var def = lesson.defaultContext || 'everyday';
+    return { key: def, ctx: lesson.contexts[def], fallback: true };
+  }
+
   function lessonWords(lesson, ctxKey) {
-    var ctx = lesson.contexts[ctxKey] || lesson.contexts.everyday;
+    var ctx = contextFor(lesson, ctxKey).ctx;
     return {
       core: lesson.words.slice(),
       theme: (ctx.themeWords || []).slice()
@@ -142,11 +175,32 @@ FEA.engine = (function () {
   }
 
   // ---------- Повторение
-  function dueReviewIds(profile, now, limit, exclude) {
+  /*
+   * Вопрос повторения по id. Два вида:
+   *  - заранее написанные вопросы урока и диагностики (reviewItems);
+   *  - ошибки из урока: 'm|<урок>|<тема>|<фаза>|<номер>' — то же задание через день,
+   *    для задания по тексту вместе с текстом.
+   */
+  function getReview(id) {
+    var item = reviewItems[id];
+    if (item) return { task: item, text: null, skill: item.skill, source: item.source };
+    if (id.indexOf('m|') !== 0) return null;
+    var p = id.split('|');
+    var lesson = lessonsById[p[1]];
+    if (!lesson) return null;
+    var ctx = lesson.contexts[p[2]];
+    var idx = Number(p[4]);
+    var task = p[3] === 'warmup' ? lesson.warmup : p[3] === 'core' ? lesson.tasks[idx] : (ctx && ctx.tasks[idx]);
+    if (!task || task.type === 'match') return null;
+    return { task: task, text: p[3] === 'context' && ctx ? ctx.text : null, skill: lesson.skill, source: lesson.id };
+  }
+
+  function dueReviewIds(profile, now, limit, exclude, excludeSource) {
     exclude = exclude || [];
     var ids = Object.keys(profile.reviews || {}).filter(function (id) {
       var r = profile.reviews[id];
-      return reviewItems[id] && r.due <= now && exclude.indexOf(id) === -1;
+      var item = getReview(id);
+      return item && r.due <= now && exclude.indexOf(id) === -1 && (!excludeSource || item.source !== excludeSource);
     });
     // Сначала самые просроченные, затем те, где были ошибки
     ids.sort(function (a, b) {
@@ -165,6 +219,16 @@ FEA.engine = (function () {
     }
   }
 
+  /* Ошибка в уроке: задание вернётся в повторение через первый интервал (по умолчанию завтра). */
+  function scheduleMistake(profile, lessonId, ctxKey, phase, idx, now) {
+    var id = ['m', lessonId, ctxKey, phase, idx].join('|');
+    if (!getReview(id)) return null;
+    var r = profile.reviews[id];
+    if (!r) profile.reviews[id] = { box: 0, due: now + S.reviewIntervalsDays[0] * DAY, added: now, correct: 0, wrong: 1, lastAt: now };
+    else { r.box = 0; r.due = now + S.reviewIntervalsDays[0] * DAY; r.wrong = (r.wrong || 0) + 1; r.lastAt = now; }
+    return id;
+  }
+
   /* Результат повторения: верно -> следующий интервал, неверно -> снова через 1 день. */
   function applyReview(profile, id, ok, now) {
     var r = profile.reviews[id];
@@ -180,7 +244,7 @@ FEA.engine = (function () {
       r.due = now + intervals[0] * DAY;
     }
     r.lastAt = now;
-    var item = reviewItems[id];
+    var item = getReview(id);
     profile.reviewLog = profile.reviewLog || [];
     profile.reviewLog.push({ id: id, skill: item ? item.skill : null, source: item ? item.source : null, ok: ok, at: now });
     if (profile.reviewLog.length > 300) profile.reviewLog = profile.reviewLog.slice(-300);
@@ -198,27 +262,32 @@ FEA.engine = (function () {
    * (узнавание -> вспоминание -> применение) -> текст -> задания по тексту.
    */
   function buildLessonSteps(lesson, ctxKey, profile, now) {
-    var ctx = lesson.contexts[ctxKey] || lesson.contexts.everyday;
+    var ctx = contextFor(lesson, ctxKey).ctx;
     var own = (lesson.review || []).map(function (r) { return r.id; });
     var steps = [];
-    steps.push({ kind: 'task', phase: 'warmup', task: lesson.warmup });
-    dueReviewIds(profile, now, S.reviewsInLesson, own).forEach(function (id) {
-      steps.push({ kind: 'task', phase: 'review', task: reviewItems[id], reviewId: id });
+    steps.push({ kind: 'mission' });
+    steps.push({ kind: 'task', phase: 'warmup', task: lesson.warmup, idx: 0 });
+    // Повторы из других уроков (не из этого же — чтобы не подсказывать ответы)
+    dueReviewIds(profile, now, S.reviewsInLesson, own, lesson.id).forEach(function (id) {
+      var r = getReview(id);
+      steps.push({ kind: 'task', phase: 'review', task: r.task, text: r.text, reviewId: id });
     });
+    if (lesson.story) steps.push({ kind: 'story', story: lesson.story });
     steps.push({ kind: 'intro' });
-    lesson.tasks.forEach(function (t) {
-      steps.push({ kind: 'task', phase: 'core', task: t });
+    lesson.tasks.forEach(function (t, i) {
+      steps.push({ kind: 'task', phase: 'core', task: t, idx: i, hint: lesson.hints ? lesson.hints[i] : null });
     });
     steps.push({ kind: 'text', text: ctx.text });
-    ctx.tasks.forEach(function (t) {
-      steps.push({ kind: 'task', phase: 'context', task: t, text: ctx.text });
+    ctx.tasks.forEach(function (t, i) {
+      steps.push({ kind: 'task', phase: 'context', task: t, text: ctx.text, idx: i });
     });
     return steps;
   }
 
   function buildReviewSteps(profile, now) {
     return dueReviewIds(profile, now, S.reviewSessionSize).map(function (id) {
-      return { kind: 'task', phase: 'review', task: reviewItems[id], reviewId: id };
+      var r = getReview(id);
+      return { kind: 'task', phase: 'review', task: r.task, text: r.text, reviewId: id };
     });
   }
 
@@ -257,8 +326,8 @@ FEA.engine = (function () {
 
   function recommendNext(profile, now) {
     var candidates = SKILL_ORDER.map(function (skill) {
-      return lessonFor(profile.stages[skill], skill);
-    }).filter(function (l) { return l && !profile.lessons[l.id]; });
+      return nextLessonFor(profile, skill);
+    }).filter(Boolean);
 
     if (candidates.length) {
       candidates.sort(function (a, b) {
@@ -272,25 +341,44 @@ FEA.engine = (function () {
   }
 
   // ---------- Предложение сменить ступень (никогда не применяется автоматически)
+  /*
+   * Предложение учитывает ВСЕ уроки ступени по навыку. Повышение предлагается,
+   * только когда все они пройдены хорошо и после этого были верные повторения.
+   */
   function stageProposal(profile, skill) {
     var stage = profile.stages[skill];
-    var lesson = lessonFor(stage, skill);
-    if (!lesson) return null;
-    var rec = profile.lessons[lesson.id];
-    if (!rec) return null;
-    var after = (profile.reviewLog || []).filter(function (e) {
-      return e.skill === skill && e.ok && e.source !== 'diagnostic' && e.at > (rec.completedAtMs || 0);
-    }).length;
-    if (rec.bestAccuracy >= S.proposeUpMinAccuracy && after >= S.proposeUpMinLaterReviews && lessonFor(stage + 1, skill)) {
-      return { dir: 'up', text: 'Сабақ жақсы өтті және кейінгі қайталауларда да есіңізде қалды. Келесі сатыны байқап көруге болады.' };
-    }
-    if (rec.bestAccuracy >= S.proposeUpMinAccuracy && lessonFor(stage + 1, skill)) {
-      return { dir: 'wait', text: 'Сабақ жақсы өтті. Келесі сатыны ұсыну үшін алдымен бірнеше күннен кейін қайталауды орындаңыз — бұл есте сақталғанын көрсетеді.' };
-    }
-    if (rec.lastAccuracy <= S.proposeDownMaxAccuracy && stage > 0) {
+    var list = lessonsAt(stage, skill);
+    if (!list.length) return null;
+    var recs = list.map(function (l) { return profile.lessons[l.id]; }).filter(Boolean);
+    if (!recs.length) return null;
+    var latest = recs.slice().sort(function (a, b) { return (b.completedAtMs || 0) - (a.completedAtMs || 0); })[0];
+    var hasNext = lessonsAt(stage + 1, skill).length > 0;
+    if (latest.lastAccuracy <= S.proposeDownMaxAccuracy && stage > 0) {
       return { dir: 'down', text: 'Бұл саты әзірге қиындау болуы мүмкін. Сабақты басқа мәтінмен қайталауға немесе жеңілірек сатыға ауысуға болады.' };
     }
+    if (recs.length < list.length) {
+      return { dir: 'info', text: 'Осы сатыдағы сабақтар: ' + recs.length + ' / ' + list.length + ' өтілді.' };
+    }
+    var avg = recs.reduce(function (sum, r) { return sum + (r.bestAccuracy || 0); }, 0) / recs.length;
+    var after = (profile.reviewLog || []).filter(function (e) {
+      return e.skill === skill && e.ok && e.source !== 'diagnostic' && e.at > (latest.completedAtMs || 0);
+    }).length;
+    if (avg >= S.proposeUpMinAccuracy && after >= S.proposeUpMinLaterReviews && hasNext) {
+      return { dir: 'up', text: 'Осы сатыдағы сабақтар жақсы өтті және кейінгі қайталауларда да есіңізде қалды. Келесі сатыны байқап көруге болады.' };
+    }
+    if (avg >= S.proposeUpMinAccuracy && hasNext) {
+      return { dir: 'wait', text: 'Сабақтар жақсы өтті. Келесі сатыны ұсыну үшін алдымен бірнеше күннен кейін қайталауды орындаңыз — бұл есте сақталғанын көрсетеді.' };
+    }
     return null;
+  }
+
+  /* Для отчёта и интерфейса: в каких уроках есть текст для каждой темы. */
+  function interestCoverage() {
+    var out = {};
+    FEA.lessons.slice().sort(byOrder).forEach(function (l) {
+      Object.keys(l.contexts).forEach(function (k) { (out[k] = out[k] || []).push(l.id); });
+    });
+    return out;
   }
 
   // ---------- Диагностика
@@ -304,6 +392,13 @@ FEA.engine = (function () {
     DAY: DAY,
     getLesson: getLesson,
     lessonFor: lessonFor,
+    lessonsAt: lessonsAt,
+    nextLessonFor: nextLessonFor,
+    contextFor: contextFor,
+    missionFor: missionFor,
+    getReview: getReview,
+    scheduleMistake: scheduleMistake,
+    interestCoverage: interestCoverage,
     lessonsForSkill: lessonsForSkill,
     reviewItems: reviewItems,
     normalize: normalize,

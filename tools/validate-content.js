@@ -79,7 +79,7 @@ function checkVariant(l, c, ctx, w) {
   (ctx.interests || []).forEach(function (i) { if (!DIRS[i]) err(vw + ': неизвестное направление ' + i); });
   if (ctx.interests && c !== 'v-' + ctx.interests[0]) err(vw + ': ключ не совпадает с первым направлением');
   if (!FEA.actionModes[ctx.mode]) err(vw + ': неизвестный тип действия ' + ctx.mode);
-  if (!ctx.role || !ctx.label || !ctx.textHeading) err(vw + ': нет роли, названия или заголовка материала');
+  if (!ctx.role || !ctx.label || !ctx.textHeading || !ctx.task) err(vw + ': нет роли, названия, короткой задачи (task) или заголовка материала');
   if (!ctx.mission || !ctx.mission.title || !ctx.mission.scene) err(vw + ': нет миссии варианта');
   if (ctx.tasks.length !== 2) err(vw + ': у варианта должно быть 2 задания (решение + использование формы)');
   ctx.tasks.forEach(function (t, i) {
@@ -162,6 +162,21 @@ FEA.lessons.forEach(function (l) {
     checkTask(r, w + ' повторение ' + r.id);
   });
 });
+
+// Короткие формулировки направлений и словарь
+(FEA.directions || []).forEach(function (d) {
+  var sh = FEA.directionShort && FEA.directionShort[d.id];
+  if (!sh || !sh.doing) err('Направление ' + d.id + ': нет короткой формулировки');
+  var st = E.directionStats(d.id);
+  if (sh && sh.role && !st.action.length) err('Направление ' + d.id + ': обещана роль, но вариантов-действий нет');
+  if (sh && !sh.role && st.action.length) warn('Направление ' + d.id + ': есть варианты, но роль на экране выбора не показана');
+});
+var dictionary = E.buildDictionary();
+dictionary.forEach(function (e) {
+  if (!e.kk.length) err('Словарь: «' + e.en + '» без перевода');
+  if (!e.sources.length) err('Словарь: «' + e.en + '» без урока-источника');
+});
+console.log('Словарь: ' + dictionary.length + ' записей, с примером: ' + dictionary.filter(function (e) { return e.example; }).length);
 
 // Диагностика
 var perSkill = {};

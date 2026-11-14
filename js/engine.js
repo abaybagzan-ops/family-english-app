@@ -247,12 +247,77 @@ FEA.engine = (function () {
     return { key: def, ctx: lesson.contexts[def], kind: 'neutral', interest: list[0] || null };
   }
 
+  /*
+   * Покрытие направления по урокам: где есть вариант-действие (с примером) и где только текст на тему.
+   * Нужен экрану выбора, чтобы не обещать больше, чем есть.
+   */
+  function directionStats(id) {
+    var d = directionsById[id];
+    var out = { action: [], topic: 0 };
+    FEA.lessons.slice().sort(byOrder).forEach(function (l) {
+      var keys = Object.keys(l.contexts);
+      var act = keys.filter(function (k) { var c = l.contexts[k]; return isActionVariant(c) && c.interests.indexOf(id) !== -1; })
+        .sort(function (a, b) { return (l.contexts[b].interests[0] === id) - (l.contexts[a].interests[0] === id); });
+      if (act.length) out.action.push({ lesson: l, key: act[0], ctx: l.contexts[act[0]] });
+      else if (d && keys.some(function (k) { return !isActionVariant(l.contexts[k]) && d.topics.indexOf(k) !== -1; })) out.topic++;
+    });
+    return out;
+  }
+
   /* Все варианты урока для ручного выбора: сначала варианты-действия. */
   function lessonVariants(lesson) {
-    var keys = Object.keys(lesson.contexts);
+    var all = Object.keys(lesson.contexts);
+    // Тематический текст, который уже целиком используется вариантом-действием, не показываем вторым пунктом
+    var keys = all.filter(function (k) {
+      var c = lesson.contexts[k];
+      return isActionVariant(c) || !all.some(function (o) { return o !== k && isActionVariant(lesson.contexts[o]) && lesson.contexts[o].text === c.text; });
+    });
     return keys.filter(function (k) { return isActionVariant(lesson.contexts[k]); })
       .concat(keys.filter(function (k) { return !isActionVariant(lesson.contexts[k]); }))
       .map(function (k) { return { key: k, ctx: lesson.contexts[k], action: isActionVariant(lesson.contexts[k]) }; });
+  }
+
+  /*
+   * Словарь из слов уроков: ядро урока (words) и тематические слова текстов (themeWords).
+   * Перевод берётся только из записи слова; глоссарии к текстам не берутся (это контекстные формы).
+   * Пример — из примеров урока (с переводом), иначе строка из текста урока (только английский).
+   * Запись без перевода не показывается.
+   */
+  var dictCache = null;
+  function containsWord(line, en) {
+    var w = en.split(/\s+[—-]\s+/)[0].toLowerCase().replace(/[.!?]/g, '');
+    var esc = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp('(^|[^a-z\'])' + esc + '([^a-z]|$)', 'i').test(line);
+  }
+  function buildDictionary() {
+    if (dictCache) return dictCache;
+    var map = {};
+    FEA.lessons.slice().sort(byOrder).forEach(function (l) {
+      function add(w, ctxKey) {
+        if (!w || !w.en || !w.kk) return;
+        var k = w.en.trim().toLowerCase();
+        var e = map[k] || (map[k] = { key: k, en: w.en.trim(), kk: [], emoji: w.emoji || '', example: null, sources: [] });
+        if (e.kk.indexOf(w.kk) === -1) e.kk.push(w.kk);
+        if (!e.sources.some(function (x) { return x.lessonId === l.id; })) e.sources.push({ lessonId: l.id, title: l.title, skill: l.skill, stage: l.stage, ctx: ctxKey || null });
+        if (!e.example) {
+          var ex = (l.examples || []).filter(function (x) { return containsWord(x.en, w.en); })[0];
+          if (ex) e.example = { en: ex.en, kk: ex.kk };
+        }
+        if (!e.example || !e.example.kk) {
+          var ctxs = ctxKey ? [l.contexts[ctxKey]] : [l.contexts[l.defaultContext || 'everyday']];
+          ctxs.forEach(function (c) {
+            if (e.example || !c) return;
+            var line = c.text.lines.filter(function (x) { return containsWord(x, w.en) && x.length <= 90; })[0];
+            if (line) e.example = { en: line, kk: null };
+          });
+        }
+      }
+      l.words.forEach(function (w) { add(w, null); });
+      Object.keys(l.contexts).forEach(function (k) { (l.contexts[k].themeWords || []).forEach(function (w) { add(w, k); }); });
+    });
+    dictCache = Object.keys(map).map(function (k) { return map[k]; })
+      .sort(function (a, b) { return a.key.localeCompare(b.key); });
+    return dictCache;
   }
 
   function variantLabel(lesson, key) {
@@ -558,6 +623,8 @@ FEA.engine = (function () {
     directionMeta: directionMeta,
     pickVariant: pickVariant,
     lessonVariants: lessonVariants,
+    directionStats: directionStats,
+    buildDictionary: buildDictionary,
     variantLabel: variantLabel,
     isActionVariant: isActionVariant,
     lessonWords: lessonWords,

@@ -83,6 +83,7 @@ FEA.storage = (function () {
     if (p.mistakes !== undefined && !Array.isArray(p.mistakes)) return '«' + p.name + '» — қателер тізімі қате';
     if (p.stages !== null && p.stages !== undefined && !isObj(p.stages)) return '«' + p.name + '» — саты қате';
     if (p.interests !== null && p.interests !== undefined && !Array.isArray(p.interests)) return '«' + p.name + '» — қызығушылықтар тізімі қате';
+    if (p.vocab !== undefined && !isObj(p.vocab)) return '«' + p.name + '» — сөздік деректері қате';
     return null;
   }
 

@@ -176,7 +176,12 @@ FEA.engine = (function () {
     if (!d) return null;
     var ok = d.likes.map(function (l) { return l.id; });
     var likes = Array.isArray(x.likes) ? x.likes.filter(function (l) { return ok.indexOf(l) !== -1; }) : [];
-    return { id: d.id, likes: likes };
+    var out = { id: d.id, likes: likes };
+    // Выбранные оригинальные миры (необязательно); поле есть только если что-то выбрано
+    var okW = worldsFor(d.id).map(function (w) { return w.id; });
+    var worlds = Array.isArray(x.worlds) ? x.worlds.filter(function (w) { return okW.indexOf(w) !== -1; }) : [];
+    if (worlds.length) out.worlds = worlds;
+    return out;
   }
 
   /*
@@ -197,6 +202,16 @@ FEA.engine = (function () {
     if (mapped) return [{ id: mapped, likes: [] }];
     return null;
   }
+
+  /* Оригинальные миры направления (только те, у которых есть вариант урока). */
+  function worldsFor(dirId) {
+    return (FEA.worlds || []).filter(function (w) {
+      return w.direction === dirId && FEA.lessons.some(function (l) {
+        return Object.keys(l.contexts).some(function (k) { return l.contexts[k].world === w.id; });
+      });
+    });
+  }
+  function worldMeta(id) { return (FEA.worlds || []).filter(function (w) { return w.id === id; })[0] || null; }
 
   function hasInterestChoice(profile) { return profileInterests(profile) !== null; }
 
@@ -230,6 +245,8 @@ FEA.engine = (function () {
         if (isActionVariant(ctx) && it.id !== 'custom' && ctx.interests.indexOf(it.id) !== -1) {
           kind = 'action';
           score = 100 + weight * 10 + (modes.indexOf(ctx.mode) !== -1 ? 5 : 0) + (ctx.interests[0] === it.id ? 2 : 0);
+          // Мир: выбранный — плюс; если ученик выбрал другие миры этого направления — минус (но вариант остаётся доступен)
+          if (ctx.world && it.worlds && it.worlds.length) score += it.worlds.indexOf(ctx.world) !== -1 ? 4 : -3;
         } else if (isActionVariant(ctx) && modes.indexOf(ctx.mode) !== -1) {
           kind = 'mode';
           score = 50 + weight * 10;
@@ -667,6 +684,8 @@ FEA.engine = (function () {
     tierFor: tierFor,
     buildPracticeSteps: buildPracticeSteps,
     directionStats: directionStats,
+    worldsFor: worldsFor,
+    worldMeta: worldMeta,
     buildDictionary: buildDictionary,
     variantLabel: variantLabel,
     isActionVariant: isActionVariant,

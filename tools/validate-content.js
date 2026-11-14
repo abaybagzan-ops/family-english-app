@@ -82,6 +82,11 @@ function checkVariant(l, c, ctx, w) {
   if (!ctx.role || !ctx.label || !ctx.textHeading || !ctx.task) err(vw + ': нет роли, названия, короткой задачи (task) или заголовка материала');
   if (!ctx.mission || !ctx.mission.title || !ctx.mission.scene) err(vw + ': нет миссии варианта');
   if (ctx.tasks.length !== 2) err(vw + ': у варианта должно быть 2 задания (решение + использование формы)');
+  if (ctx.world) {
+    var wm = (FEA.worlds || []).filter(function (x) { return x.id === ctx.world; })[0];
+    if (!wm) err(vw + ': неизвестный мир ' + ctx.world);
+    else if (ctx.interests.indexOf(wm.direction) === -1) err(vw + ': мир ' + ctx.world + ' не относится к направлениям варианта');
+  }
   ctx.tasks.forEach(function (t, i) {
     if (t.outcomes && (!t.options || t.outcomes.length !== t.options.length)) err(vw + ' задание ' + (i + 1) + ': последствий не столько, сколько вариантов');
   });
@@ -199,6 +204,10 @@ Object.keys(FEA.lessonChallenges || {}).forEach(function (id) {
   var st = E.directionStats(d.id);
   if (sh && sh.role && !st.action.length) err('Направление ' + d.id + ': обещана роль, но вариантов-действий нет');
   if (sh && !sh.role && st.action.length) warn('Направление ' + d.id + ': есть варианты, но роль на экране выбора не показана');
+});
+(FEA.worlds || []).forEach(function (w) {
+  if (!DIRS[w.direction]) err('Мир ' + w.id + ': неизвестное направление');
+  if (!E.worldsFor(w.direction).some(function (x) { return x.id === w.id; })) err('Мир ' + w.id + ': нет ни одного варианта урока — не показывать в выборе');
 });
 var dictionary = E.buildDictionary();
 dictionary.forEach(function (e) {

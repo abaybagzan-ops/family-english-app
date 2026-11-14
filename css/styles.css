@@ -719,3 +719,15 @@ details.stage-group[open] > summary { margin-bottom: var(--s3); }
 .tier-sub { font-size: var(--t-sm); color: var(--ink-2); line-height: 1.35; }
 .tier-fine { font-size: var(--t-sm); color: var(--muted); margin: var(--s2) 0 0; }
 .challenge-tag { color: var(--ink-2); font-weight: 600; }
+
+/* цепочка интереса и оригинальные миры */
+.chain { margin: 0 0 var(--s3); padding: 8px 12px; border-radius: 8px; background: var(--action-soft); color: var(--ink); font-size: var(--t-md); }
+.chain-from { font-weight: 700; color: var(--action); }
+.chain-arrow { color: var(--action); font-weight: 700; }
+.world-list { display: grid; gap: 8px; margin-top: 6px; }
+.world-option { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; min-height: 52px; padding: 8px 12px; border-radius: 8px; border: 1.5px solid var(--line); background: var(--sheet); cursor: pointer; color: var(--ink); }
+.world-option:hover { border-color: var(--action); }
+.world-option.active { border-color: var(--action); background: var(--action-soft); box-shadow: inset 0 0 0 1px var(--action); }
+.world-option.active .world-title::before { content: "✓ "; color: var(--action); }
+.world-title { font-weight: 700; }
+.world-short { font-size: var(--t-sm); color: var(--ink-2); }

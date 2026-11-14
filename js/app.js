@@ -592,7 +592,7 @@
     var p = profile();
     var editing = route.params.edit;
     var max = FEA.maxDirections;
-    var sel = (E.profileInterests(p) || []).map(function (x) { return { id: x.id, likes: x.likes.slice(), custom: x.custom || '' }; });
+    var sel = (E.profileInterests(p) || []).map(function (x) { return { id: x.id, likes: x.likes.slice(), custom: x.custom || '', worlds: (x.worlds || []).slice() }; });
     var cards = {};
     var counter = h('p', { class: 'interest-counter', role: 'status' });
     var details = h('div', { class: 'interest-details' });
@@ -620,7 +620,7 @@
       var cur = find(id);
       if (cur) sel.splice(sel.indexOf(cur), 1);
       else if (sel.length >= max) { sync('Ең көбі ' + max + ' бағыт. Жаңасын қосу үшін біреуін алып тастаңыз.'); return; }
-      else sel.push({ id: id, likes: [], custom: '' });
+      else sel.push({ id: id, likes: [], custom: '', worlds: [] });
       sync();
     }
 
@@ -660,23 +660,36 @@
         var short = FEA.directionShort[item.id] || {};
         var box = h('fieldset', { class: 'interest-detail' }, h('legend', null, (sel.length > 1 ? (n + 1) + ' · ' : '') + d.title));
         if (item.id === 'custom') {
-          var input = h('input', { class: 'text-input', type: 'text', maxlength: '40', placeholder: 'Тақырыбыңызды жазыңыз', value: item.custom, 'aria-label': 'Өз тақырыбыңыз' });
+          var input = h('input', { class: 'text-input', type: 'text', maxlength: '40', placeholder: 'Тақырып немесе сүйікті кейіпкер', value: item.custom, 'aria-label': 'Өз тақырыбыңыз немесе кейіпкеріңіз' });
           input.addEventListener('input', function () { item.custom = input.value; });
           box.appendChild(h('div', { class: 'chips' }, d.suggestions.map(function (t) {
             return h('button', { class: 'chip', onclick: function () { input.value = t; item.custom = t; } }, t);
           })));
           box.appendChild(input);
-          box.appendChild(h('p', { class: 'small' }, 'Қандай әрекет ұнайды? Сабақ сол әрекетпен беріледі, бірақ тақырыбы басқа болады.'));
+          box.appendChild(h('p', { class: 'small' }, 'Атауы профильде сақталады. Ол туралы дайын мәтін жоқ: қандай әрекет ұнайтынын таңдасаңыз, сабақ сол әрекетпен беріледі, бірақ кейіпкерлері басқа болады.'));
           box.appendChild(h('div', { class: 'chips' }, d.modeChoices.map(function (m) { return likeChip(item, m, FEA.actionModes[m].title, 2); })));
         } else {
           box.appendChild(examplePanel(item));
           box.appendChild(h('p', { class: 'likes-label' }, 'Нақтырақ (міндетті емес):'));
           box.appendChild(h('div', { class: 'chips' }, d.likes.map(function (l) { return likeChip(item, l.id, l.title); })));
+          var worlds = E.worldsFor(item.id);
+          if (worlds.length) {
+            box.appendChild(h('p', { class: 'likes-label' }, 'Кейіпкерлер әлемі (міндетті емес):'));
+            box.appendChild(h('div', { class: 'world-list' }, worlds.map(function (w) {
+              var on = item.worlds.indexOf(w.id) !== -1;
+              return h('button', { class: 'world-option' + (on ? ' active' : ''), 'aria-pressed': on ? 'true' : 'false', onclick: function () {
+                var i = item.worlds.indexOf(w.id);
+                if (i !== -1) item.worlds.splice(i, 1); else item.worlds.push(w.id);
+                drawDetails(w.title);
+              } }, h('span', { class: 'world-title' }, w.title), h('span', { class: 'world-short' }, w.short));
+            })));
+            box.appendChild(h('p', { class: 'fineprint' }, 'Кейіпкерлер осы қосымша үшін ойдан шығарылған. Танымал кітап, фильм, ойын кейіпкерлері мен нақты адамдар қолданылмайды.'));
+          }
         }
         details.appendChild(box);
       });
       if (focusText) {
-        var again = [].filter.call(details.querySelectorAll('.chip'), function (c) { return c.textContent === focusText; })[0];
+        var again = [].filter.call(details.querySelectorAll('.chip, .world-option'), function (c) { return c.textContent === focusText || (c.querySelector('.world-title') && c.querySelector('.world-title').textContent === focusText); })[0];
         if (again) again.focus();
       }
     }
@@ -936,6 +949,7 @@
         h('span', null, stageLabel(lesson.stage))),
       h(opts.big ? 'h2' : 'h3', { class: 'lesson-title' }, lesson.title),
       h('p', { class: 'lesson-goal' }, lesson.canDo || lesson.goal),
+      opts.big ? chainLine(lesson, opts.ctxKey) : null,
       h('div', { class: 'lesson-card-foot' },
         h('div', { class: 'lesson-card-tags' },
           variantBadge(lesson, opts.ctxKey),
@@ -977,6 +991,18 @@
       : 'Жалпы сабақ';
     return h('span', { class: 'variant-tag tag-' + k }, text);
   }
+  /*
+   * Цепочка «что нравится → что сделать» — только когда интерес действительно меняет задание.
+   * Для темы текста и общего варианта цепочку не показываем (метка на карточке говорит честно).
+   */
+  function chainLine(lesson, ctxKey) {
+    var v = variantInfo(lesson, ctxKey);
+    if (variantKind(v) !== 'mission' || !v.ctx.task) return null;
+    var task = v.ctx.task.charAt(0).toUpperCase() + v.ctx.task.slice(1);
+    var who = v.interest ? (v.interest.id === 'custom' ? 'Сіз таңдаған әрекет' : E.directionMeta(v.interest.id).title + ' ұнайды') : 'Таңдалған нұсқа';
+    return h('p', { class: 'chain' }, h('span', { class: 'chain-from' }, who), h('span', { class: 'chain-arrow', 'aria-hidden': 'true' }, ' → '), h('span', null, task + '.'));
+  }
+
   /* Одно короткое пояснение для миссии (без повторов роли и цели). */
   function variantNote(v) {
     var k = variantKind(v);
@@ -1368,6 +1394,7 @@
       h('h2', { class: 'mission-title' }, m.title),
       h('dl', { class: 'mission-facts' },
         isMission ? h('div', null, h('dt', null, 'Сіздің рөліңіз'), h('dd', null, ctx.role)) : null,
+        isMission && ctx.world && E.worldMeta(ctx.world) ? h('div', null, h('dt', null, 'Әлем'), h('dd', null, E.worldMeta(ctx.world).title + ' (ойдан шығарылған)')) : null,
         h('div', null, h('dt', null, 'Не істейсіз'), h('dd', null, isMission && ctx.task ? ctx.task.charAt(0).toUpperCase() + ctx.task.slice(1) + '.' : m.scene)),
         m.canDo ? h('div', null, h('dt', null, 'Тіл мақсаты'), h('dd', null, m.canDo)) : null),
       note ? h('p', { class: 'note' }, note) : null,

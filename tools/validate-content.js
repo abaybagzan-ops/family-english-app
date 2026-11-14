@@ -88,8 +88,17 @@ function checkVariant(l, c, ctx, w) {
       if (!ch) return err(vw + ': нет персонажа ' + id + ' в каталоге');
       if (ch.world !== ctx.franchise) err(vw + ': ' + id + ' не из мира ' + ctx.franchise);
       if (fw && fw.genre === 'real') err(vw + ': реальные люди не используются в сценах этой версии');
-      var parts = ch.name.replace(/\(.*\)/, '').split(/[\s-]+/).filter(function (x) { return x.length > 2 && !/^(Dr|Mrs|Princess|Master)\.?$/.test(x); });
+      var parts = ch.name.replace(/\(.*\)/, '').split(/[\s-]+/).filter(function (x) { return x.length > 1 && !/^(Dr|Mrs|Princess|Master)\.?$/.test(x); });
       if (!parts.some(function (x) { return body.indexOf(x) !== -1; })) err(vw + ': персонаж ' + ch.name + ' не участвует в английском материале (камео)');
+    });
+    // (а) решение требует сопоставить минимум две строки английского материала
+    var pr = ctx.tasks[0] && ctx.tasks[0].proof;
+    if (!Array.isArray(pr) || pr.length < 2 || pr.some(function (n) { return !ctx.text.lines[n]; })) err(vw + ': у решения нет proof (≥ 2 строк материала)');
+    // (б) ответ не переписан из текста: вписываемый ответ и верный английский вариант не стоят в тексте дословно
+    var low = ' ' + E.normalize(ctx.text.lines.join(' ')) + ' ';
+    ctx.tasks.forEach(function (t, i) {
+      var answers = t.type === 'type' ? t.answers : t.type === 'choice' && /^[\x00-\x7F]+$/.test(t.options[t.answer]) ? [t.options[t.answer]] : [];
+      answers.forEach(function (a) { if (low.indexOf(' ' + E.normalize(a) + ' ') !== -1) err(vw + ' задание ' + (i + 1) + ': ответ «' + a + '» дословно есть в тексте'); });
     });
   }
   if (!FEA.actionModes[ctx.mode]) err(vw + ': неизвестный тип действия ' + ctx.mode);

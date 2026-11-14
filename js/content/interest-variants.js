@@ -655,7 +655,7 @@
     tasks: [
       C('Мэйбл мен Соос ақырында сағат нешеде оралады?', ['13:00-де', '12:00-де', '11:00-де'], 0,
         'Mabel (9:30): «back at 12:00». Бірақ кейінірек Soos (10:15): «back at 13:00, not 12:00». Соңғы хабарлама жоспарды өзгертті.',
-        { outcomes: [
+        { proof: [1, 2], outcomes: [
           'Дұрыс: сіз Мэйбл мен Соосты 13:00-де күттіңіз.',
           '12:00 — ескі жоспар. Соос 10:15-те оны өзгертті.',
           '11:00 — Диппердің орманға шақырған уақыты.'
@@ -685,7 +685,7 @@
     tasks: [
       C('Гарри мен Рон кітапханаға сағат нешеде келеді?', ['4:30-да', '4:00-де', '6:00-де'], 0,
         'Harry (3:30 pm): «Ron and I are coming at 4:30, not 4.» 6:00 — кітапхана жабылатын уақыт.',
-        { outcomes: [
+        { proof: [0, 2], outcomes: [
           'Гермиона 4:30-ға дейін өз тапсырмасын бітірді.',
           '4:00 — бастапқы жоспар. Гарри оны 3:30-да өзгертті.',
           '6:00-де кітапхана жабылады — бұл кешігу болар еді.'
@@ -716,10 +716,10 @@
     tasks: [
       C('Стив шеберхана үстелін жасағысы келеді, бірақ ағашы жоқ. Не дұрыс емес?', ['Алдымен ағаш жинау керек еді', 'Алдымен баспана салу керек еді', 'Алдымен тура төмен қазу керек еді'], 0,
         'First, collect wood — бірінші қадам. Шеберхана үстелі — содан кейін (Then make a crafting table).',
-        { outcomes: ['Стив төрт ағаштан ағаш жинап, үстел жасады.', 'Баспана — соңғы қадам, бірінші емес.', 'Тура төмен қазуға тыйым салынған.'] }),
-      C('Стив: «I will dig straight down!» дейді. Алекстің жазбасы бойынша не айтасыз?', ['Don\'t dig straight down.', 'Then dig straight down.', 'First, dig straight down.'], 0,
-        'Don\'t + етістік — тыйым: Don\'t dig straight down. You can fall into a cave.',
-        { outcomes: ['Стив басқа жерден қазуды таңдады.', 'Нұсқаулықта бұл — тыйым, қадам емес.', 'Нұсқаулықтың бірінші қадамы — ағаш жинау.'] })
+        { proof: [0, 1], outcomes: ['Стив төрт ағаштан ағаш жинап, үстел жасады.', 'Баспана — соңғы қадам, бірінші емес.', 'Тура төмен қазуға тыйым салынған.'] }),
+      C('Стив: «I will dig straight down to find stone!» дейді. Алекстің жазбасы бойынша не айтасыз?', ['Don\'t do it. You can fall into a cave.', 'Do it. Then make a crafting table.', 'OK, dig. Then collect wood from four trees.'], 0,
+        'Жазбада: Don\'t dig straight down. You can fall into a cave. Тыйымды Стивтің жағдайына қолданамыз: Don\'t do it.',
+        { outcomes: ['Стив басқа жерден, баспалдақпен қазуды таңдады.', 'Нұсқаулықта бұл — тыйым, қадам емес.', 'Ағаш — бірінші қадам, бірақ тура төмен қазуға бәрібір болмайды.'] })
     ]
   });
 
@@ -743,7 +743,7 @@
     tasks: [
       C('Эш Пикачуды бірден ұйықтатқысы келеді. Алдымен не істеу керек?', ['Пикачуға су беру', 'Пикачуды ұйықтату', 'Орталыққа қайту'], 0,
         'First, give Pikachu some water. Ұйқы — содан кейін (Then let Pikachu sleep).',
-        { outcomes: ['Пикачу су ішіп, тынығуға жатты.', 'Ұйқы — екінші қадам.', 'Орталыққа сағат 5-те қайту керек — бұл соңғы қадам.'] }),
+        { proof: [0, 1], outcomes: ['Пикачу су ішіп, тынығуға жатты.', 'Ұйқы — екінші қадам.', 'Орталыққа сағат 5-те қайту керек — бұл соңғы қадам.'] }),
       C('Досы Эшті бүгін сайысқа шақырды. Эш не деуі керек?', ['Nurse Joy says: don\'t battle today.', 'Nurse Joy says: battle today.', 'Nurse Joy says: battle at 5 pm.'], 0,
         'Don\'t battle today. Pikachu is tired — бүгін сайысқа шықпа, Пикачу шаршаған.',
         { outcomes: ['Эш сайысты ертеңге қалдырды.', 'Карточкада керісінше: бүгін сайыс жоқ.', 'Сағат 5-те — орталыққа қайту, сайыс емес.'] })
@@ -772,7 +772,7 @@
     tasks: [
       C('Мұнараға екі кілт керек, бірақ бір ғана есік ашуға болады. Қай есікті ашқан дұрыс?', ['Көк есікті: онда екі кілт бар', 'Қызыл есікті: онда екі кілт бар', 'Қызыл есікті: онда үш кілт бар'], 0,
         'Behind the blue door there are two keys. Қызыл есіктің артында — бір кілт (there is one key) және үш тиын.',
-        { outcomes: ['Марио мен Луиджи екі кілтпен мұнараны ашты.', 'Қызыл есікте бір ғана кілт: there is one key.', 'Үшеу — тиындар (three coins), кілт емес.'] }),
+        { proof: [1, 2, 3, 4], outcomes: ['Марио мен Луиджи екі кілтпен мұнараны ашты.', 'Қызыл есікте бір ғана кілт: there is one key.', 'Үшеу — тиындар (three coins), кілт емес.'] }),
       C('Тоадтың есебін аяқтаңыз. Қай сөйлем дұрыс?', ['There are three coins behind the red door.', 'There is three coins behind the red door.', 'There are three coin behind the red door.'], 0,
         'three coins — бірнеше зат: There are, және coin сөзіне -s қосылады.')
     ]
@@ -798,9 +798,12 @@
     tasks: [
       C('Соник қай жолды таңдауы керек?', ['Жағажай жолын: ұзынырақ, бірақ жылдамырақ', 'Тау жолын: қысқарақ, сондықтан жылдамырақ', 'Тау жолын: тегістеу әрі жылдамырақ'], 0,
         'Knuckles: «The beach path is … faster». Tails: тау жолы shorter, бірақ slower. Соник үшін жылдамдық маңыздырақ.',
-        { outcomes: ['Соник жағажай жолымен бірінші жетті.', 'Тау жолы қысқарақ, бірақ тастарға байланысты баяуырақ.', 'Тегіс — жағажай жолы, тау жолы емес.'] }),
-      T('Тейлзге жауап жазыңыз. Жақшадағы сөзді салыстыру түрінде жазыңыз:', ['faster'],
-        'fast — қысқа сөз: faster.', { sentence: 'The beach path is ___ (fast) than the mountain path.' })
+        { proof: [0, 1, 2], outcomes: ['Соник жағажай жолымен бірінші жетті.', 'Тау жолы қысқарақ, бірақ тастарға байланысты баяуырақ.', 'Тегіс — жағажай жолы, тау жолы емес.'] }),
+      C('Соникке қысқа есеп: қай сөйлем екі досының сөзіне сай?', [
+        'The mountain path is shorter but slower than the beach path.',
+        'The mountain path is longer and faster than the beach path.',
+        'The beach path is shorter and slower than the mountain path.'
+      ], 0, 'Tails: тау жолы shorter, бірақ slower. Knuckles: жағажай жолы longer, бірақ faster. Демек тау жолы — қысқарақ, бірақ баяуырақ.')
     ]
   });
 
@@ -824,7 +827,7 @@
     tasks: [
       C('Олар қалай баруы керек?', ['Таксимен: қымбатырақ, бірақ роботқа қауіпсіздеу', 'Метромен: арзанырақ, сондықтан роботқа жақсырақ', 'Метромен: таксиден бос әрі қауіпсіздеу'], 0,
         'Miles: «A taxi is … safer for the robot». Gwen: «The robot is more important today». Метро — cheaper, бірақ more crowded.',
-        { outcomes: ['Робот жәрмеңкеге аман жетті.', 'Метро арзанырақ, бірақ адамға толы — роботқа қауіпті.', 'Мәтін бойынша метро бос емес: more crowded.'] }),
+        { proof: [1, 2, 3], outcomes: ['Робот жәрмеңкеге аман жетті.', 'Метро арзанырақ, бірақ адамға толы — роботқа қауіпті.', 'Мәтін бойынша метро бос емес: more crowded.'] }),
       C('Гвеннің ойын қай сөйлем дұрыс береді?', ['The robot is more important than the money.', 'The robot is importanter than the money.', 'The robot is more importanter than the money.'], 0,
         'important — ұзын сөз: more important than.')
     ]
@@ -852,9 +855,37 @@
     tasks: [
       C('Кімнің сөзі дерекке қайшы?', ['Жаңа аспаздың', 'Хадсон ханымның', 'Ватсонның'], 0,
         'The new cook: «At 8 pm I was buying bread at the market». Бірақ Holmes: «the market closes at 6 pm».',
-        { outcomes: ['Аспаз садақты байқаусызда алып қойғанын мойындады.', 'Хадсон ханымның сөзіне дерек қайшы емес.', 'Ватсонның сөзіне дерек қайшы емес.'] }),
-      T('Холмстың жазбасын аяқтаңыз (екі сөз):', ['was reading'],
-        'Сол сәтте созылып жатқан әрекет: was + reading.', { sentence: 'At 8 pm Dr Watson ___ (read) the newspaper.' })
+        { proof: [3, 4], outcomes: ['Аспаз садақты байқаусызда алып қойғанын мойындады.', 'Хадсон ханымның сөзіне дерек қайшы емес.', 'Ватсонның сөзіне дерек қайшы емес.'] }),
+      T('Холмстың жазбасын аяқтаңыз (екі сөз):', ['were staying'],
+        'Watson and Mrs Hudson — екі адам, сондықтан were + staying: екеуі де сол сәтте үйде болған.',
+        { sentence: 'At 8 pm Dr Watson and Mrs Hudson ___ (stay) at home.' })
+    ]
+  });
+
+  fan('s2-grammar', 'v-humor-wimpy', {
+    franchise: 'wimpy-kid', characters: ['greg', 'rowley'],
+    task: 'Грег пен Роулидің «не істеп жатқанын» салыстырып, кімнің сөзі шындыққа сай емес екенін табу',
+    interests: ['humor', 'investigate'], mode: 'deduce', role: 'Грегтің анасының көмекшісі', label: 'Wimpy Kid: торт қайда кетті?',
+    mission: { title: 'Жоғалған торт', scene: 'Дүйсенбі күні сағат 4-те ас үйден торт жоғалды. Грег пен Роули сол сәтте не істеп жатқанын айтты. Сөздерін салыстырыңыз.' },
+    textHeading: 'Грегтің күнделігін оқыңыз',
+    themeWords: [FEA.word('homework', 'үй тапсырмасы', '📒')],
+    text: {
+      title: 'Greg\'s diary',
+      lines: [
+        'Monday, 4 pm: Mom\'s cake disappeared from the kitchen.',
+        'Greg: "At 4 pm I was doing my homework in my room."',
+        'Rowley: "At 4 pm Greg and I were playing a video game at my house."',
+        'Mom: "Greg, your homework is still empty."'
+      ],
+      glossary: [{ en: 'disappeared', kk: 'жоғалып кетті' }, { en: 'diary', kk: 'күнделік' }, { en: 'still empty', kk: 'әлі бос' }]
+    },
+    tasks: [
+      C('Грегтің сөзіне қай деректер қайшы?', ['Роулидің сөзі мен анасының сөзі', 'Тек анасының торт туралы сөзі', 'Роули мен Грегтің бір сөзі'], 0,
+        'Greg: «I was doing my homework». Rowley: «Greg and I were playing a video game». Mom: «your homework is still empty».',
+        { proof: [1, 2, 3], outcomes: ['Грег мойындады: үй тапсырмасын істемей, ойын ойнаған.', 'Анасының бір сөзі ғана емес — Роулидің сөзі де қайшы.', 'Роули мен Грегтің сөзі бір-біріне қайшы, бірдей емес.'] }),
+      T('Роулидің сөзі бойынша жазыңыз (екі сөз):', ['was playing'],
+        'Greg — бір адам, сондықтан was + playing (Роули «were playing» деді, өйткені екеуі туралы).',
+        { sentence: 'At 4 pm Greg ___ (play) a video game.' })
     ]
   });
 
@@ -879,9 +910,226 @@
     tasks: [
       C('Велманың дерегі бойынша кімнің сөзі қате?', ['Шэгги мен Скубидің', 'Фред пен Дафнаның', 'Күзетші мен Велманың'], 0,
         'Shaggy: «we were eating sandwiches in the café». Бірақ Velma: «The café is closed today», ал сэндвич қиқымдары ажыратқыштың жанында.',
-        { outcomes: ['Шэгги күліп мойындады: екеуі ажыратқышқа сүйеніп тұрған екен.', 'Фред пен Дафнаның сөзіне дерек қайшы емес.', 'Велма — дерек тапқан адам, күдікті емес.'] }),
+        { proof: [3, 4], outcomes: ['Шэгги күліп мойындады: екеуі ажыратқышқа сүйеніп тұрған екен.', 'Фред пен Дафнаның сөзіне дерек қайшы емес.', 'Велма — дерек тапқан адам, күдікті емес.'] }),
       T('Велманың қорытындысын аяқтаңыз (екі сөз):', ['were standing'],
         'Shaggy and Scooby — көпше, сондықтан were + standing.', { sentence: 'Shaggy and Scooby ___ (stand) next to the light switch when the lights went out.' })
+    ]
+  });
+
+  // ---- ВТОРАЯ ВОЛНА ПЕРСОНАЖЕЙ (до 50+ активных). У каждого решения proof — строки, которые нужно сопоставить.
+  // s1-reading: кім / қайда / қашан
+  fan('s1-reading', 'v-investigate-zoo', {
+    franchise: 'zootopia', characters: ['judy', 'nick', 'flash-sloth'],
+    task: 'хабарламалардан Ник қашан келетінін және неге кешігетінін анықтау',
+    interests: ['investigate'], mode: 'deduce', role: 'Джуди Хоппстың көмекшісі', label: 'Zootopia: Ник қашан келеді?',
+    mission: { title: 'Жоғалған балмұздақ көлігі', scene: 'Джуди Хоппс жоғалған балмұздақ көлігін іздейді. Ник пен Флэш хабарлама жіберді. Ник саябаққа қашан келетінін және неге екенін анықтаңыз.' },
+    textHeading: 'Хабарламаларды ретімен оқыңыз',
+    themeWords: [FEA.word('truck', 'жүк көлігі', '🚚')],
+    text: {
+      title: 'Messages for Officer Hopps',
+      lines: [
+        'Judy (8:00): "Nick, meet me at the city park at 10:00. We need to find the missing ice cream truck."',
+        'Nick (8:20): "OK. But first I need the truck report from the office."',
+        'Flash (8:30): "I am... writing... the report... It is ready... at 11:00."',
+        'Nick (8:40): "Judy, then I can be at the park at 11:30, not 10:00."'
+      ],
+      glossary: [{ en: 'missing', kk: 'жоғалған' }, { en: 'report', kk: 'есеп, баянат' }, { en: 'ready', kk: 'дайын' }]
+    },
+    tasks: [
+      C('Ник саябаққа ақырында сағат нешеде келеді және неге?', ['11:30-да: алдымен Флэштің есебін алады', '10:00-де: Джудидің жоспары бойынша келеді', '11:00-де: есеп дайын болған бойда келеді'], 0,
+        'Nick: «first I need the truck report». Flash: «It is ready… at 11:00». Сондықтан Nick: «at the park at 11:30, not 10:00».',
+        { proof: [1, 2, 3], outcomes: ['Джуди 11:30-ға дейін саябақтағы куәлармен сөйлесті.', '10:00 — бастапқы жоспар; Ник оны 8:40-та өзгертті.', '11:00-де есеп енді ғана дайын болады, Ник әлі кеңседе.'] }),
+      C('Джуди Никті қай жерде күтеді?', ['Қала саябағында', 'Полиция кеңсесінде', 'Балмұздақ көлігінде'], 0,
+        'Judy: «meet me at the city park» — қала саябағында. Кеңседе — есеп, көлік — жоғалған.')
+    ]
+  });
+
+  fan('s1-reading', 'v-magic-frozen', {
+    franchise: 'frozen', characters: ['elsa', 'anna', 'olaf'],
+    task: 'хабарламалардан шоу қашан және қайда болатынын тауып, Олафтың қатесін түзету',
+    interests: ['magic'], mode: 'plan', role: 'Анна мен Эльзаның көмекшісі', label: 'Frozen: шоу қайда болады?',
+    mission: { title: 'Мұз шоуы', scene: 'Эльза мұз шоуын дайындап жатыр. Күн ыстық болып, жоспар өзгерді. Хабарламаларды оқып, Олафқа дұрыс жерді айтыңыз.' },
+    textHeading: 'Сарайдағы хабарламаларды оқыңыз',
+    themeWords: [FEA.word('garden', 'бақша', '🌷')],
+    text: {
+      title: 'Notes in the castle',
+      lines: [
+        'Elsa (9:00): "The ice show is today at 5 pm in the castle garden."',
+        'Anna (12:00): "It is very warm today. The garden is too sunny for ice."',
+        'Elsa (12:30): "OK. The show is in the big hall, at the same time."',
+        'Olaf (13:00): "Great! I\'m going to the garden at 5 pm!"'
+      ],
+      glossary: [{ en: 'warm', kk: 'жылы' }, { en: 'sunny', kk: 'күн шуақты' }, { en: 'the same time', kk: 'сол уақытта' }]
+    },
+    tasks: [
+      C('Олаф қандай қате жіберіп жатыр?', ['Ол бақшаға барады, ал шоу үлкен залда', 'Ол үлкен залға сағат бесте емес, алтыда барады', 'Ол шоу ертеңге ауысты деп ойлап, үйде отыр'], 0,
+        'Elsa (12:30): «The show is in the big hall». Ал Olaf (13:00): «I\'m going to the garden».',
+        { proof: [2, 3], outcomes: ['Олаф залға келіп, шоуды бірінші қатардан көрді.', 'Олаф уақытты дұрыс жазды: 5 pm. Қате — орында.', 'Олаф шоуға барады: «I\'m going… at 5 pm».'] }),
+      C('Шоу қашан және қай жерде болады?', ['Бүгін 17:00-де, үлкен залда', 'Бүгін 17:00-де, бақшада', 'Бүгін 12:30-да, үлкен залда'], 0,
+        'Уақыт — Elsa (9:00): «at 5 pm». Орны өзгерді — Elsa (12:30): «in the big hall, at the same time».',
+        { proof: [0, 2] })
+    ]
+  });
+
+  // s1-reading-2: first / then / don't
+  fan('s1-reading-2', 'v-magic-pj', {
+    franchise: 'percy-jackson', characters: ['annabeth', 'percy', 'grover'],
+    task: 'Аннабеттің ережесін оқып, Персидің өткізіп жіберген қадамын және тыйымды табу',
+    interests: ['magic'], mode: 'diagnose', role: 'Персидің каноэдегі серігі', label: 'Percy Jackson: каноэ ережелері',
+    mission: { title: 'Өзендегі жаттығу', scene: 'Лагерьде каноэ жаттығуы. Аннабет ереже жазды. Перси асығып тұр. Оған не өткізіп жібергенін және не істеуге болмайтынын айтыңыз.' },
+    textHeading: 'Аннабеттің ережелерін оқыңыз',
+    themeWords: [FEA.word('river', 'өзен', '🏞️')],
+    text: {
+      title: 'Annabeth\'s canoe rules',
+      lines: [
+        'First, put on a life jacket.',
+        'Then check the map with Grover. He knows the river.',
+        'Don\'t go past the old bridge. The water is fast there.',
+        'Then meet me at the big rock before 3 pm.',
+        'Percy: "My life jacket is on. Let\'s go past the bridge — it\'s quicker!"'
+      ],
+      glossary: [{ en: 'life jacket', kk: 'құтқару кеудешесі' }, { en: 'past', kk: '…-дан әрі, өтіп' }, { en: 'rock', kk: 'тас, жартас' }]
+    },
+    tasks: [
+      C('Перси нені өткізіп жіберді және не істеуге болмайды?', ['Гровермен картаны тексермеді; көпірден әрі өтуге болмайды', 'Кеудешені дұрыс кимеді; үлкен тастың жанына баруға болмайды', 'Аннабетпен сөйлеспеді; көпірден тек жаяу өтуге болады'], 0,
+        'Ереже: First — life jacket (Перси киді), Then — check the map with Grover (Перси өткізіп жіберді). Don\'t go past the old bridge.',
+        { proof: [1, 2, 4], outcomes: ['Перси Гровермен картаны қарап, көпірге дейін тоқтады.', 'Перси: «My life jacket is on» — кеудеше киілген.', 'Ережеде көпірден өтуге мүлде болмайды.'] }),
+      C('Перси Гроверге не айтуы керек?', ['Let\'s check the map first. Don\'t go past the bridge.', 'Let\'s go past the old bridge first. Don\'t check the map.', 'First, go past the bridge. Then check the map.'], 0,
+        'Ереже бойынша: алдымен карта (Then check the map), көпірден өтуге тыйым (Don\'t go past the old bridge).')
+    ]
+  });
+
+  fan('s1-reading-2', 'v-sport-kfp', {
+    franchise: 'kung-fu-panda', characters: ['shifu', 'tigress', 'po'],
+    task: 'Шифудың карточкасын оқып, жаттығу ретін және По бұзғысы келген тыйымды табу',
+    interests: ['sport'], mode: 'diagnose', role: 'Шифудың шәкірті', label: 'Kung Fu Panda: жаттығу карточкасы',
+    mission: { title: 'Жаттығудың алдында', scene: 'Шифу ұстаз жаттығу карточкасын ілді. По қарны ашып тұр. Карточка бойынша жаттығу ретін табыңыз және Поға кеңес беріңіз.' },
+    textHeading: 'Шифудың карточкасын оқыңыз',
+    themeWords: [FEA.word('balance', 'тепе-теңдік', '⚖️')],
+    text: {
+      title: 'Master Shifu\'s training card',
+      lines: [
+        'First, run around the training hall two times.',
+        'Then practice balance on one leg for one minute.',
+        'Don\'t eat before training. Eat after it.',
+        'Tigress (to Po): "Training starts in five minutes. Read the card!"',
+        'Po: "But I\'m hungry! I want dumplings now."'
+      ],
+      glossary: [{ en: 'around', kk: 'айнала' }, { en: 'dumplings', kk: 'тұшпара' }, { en: 'hungry', kk: 'аш' }]
+    },
+    tasks: [
+      C('По не істеуі керек?', ['Тұшпараны жаттығудан кейін жеу', 'Тұшпараны жүгіріп жүріп жеу', 'Тұшпараны Тайгресске беріп жіберу'], 0,
+        'Tigress: жаттығу бес минуттан кейін басталады. Карточкада: «Don\'t eat before training. Eat after it.»',
+        { proof: [2, 3, 4], outcomes: ['По жаттығудан кейін тұшпараны тыныш жеді.', 'Жаттығу кезінде жеуге болмайды: Don\'t eat before training.', 'Карточкада тамақты бөлісу туралы ештеңе жоқ.'] }),
+      C('Карточка бойынша реті қандай?', ['Жүгіру → бір аяқпен тепе-теңдік → тамақ', 'Тамақ → жүгіру → бір аяқпен тепе-теңдік', 'Тепе-теңдік → тамақ → жүгіру'], 0,
+        'First, run. Then practice balance. Eat after it (жаттығудан кейін).', { proof: [0, 1, 2] })
+    ]
+  });
+
+  // s2-grammar-2: сравнение
+  fan('s2-grammar-2', 'v-magic-avatar', {
+    franchise: 'avatar', characters: ['sokka', 'katara', 'aang', 'toph'],
+    task: 'достардың өзін салыстырған сөзін оқып, кім қай жұмысты істейтінін шешу',
+    interests: ['magic', 'strategy'], mode: 'plan', role: 'Аангтың командасындағы жоспарлаушы', label: 'Avatar: кім неге көмектеседі?',
+    mission: { title: 'Ауылға көмек', scene: 'Ауылға көмек керек: жолда ауыр тас жатыр, құдық бос. Достар өздерін салыстырды. Кім не істейтінін шешіңіз.' },
+    textHeading: 'Достардың сөзін салыстырыңыз',
+    themeWords: [FEA.word('well', 'құдық', '🪣')],
+    text: {
+      title: 'Who can help in the village?',
+      lines: [
+        'The village needs help: a heavy rock is on the road, and the well is empty.',
+        'Sokka: "Toph is stronger than me. I am better with maps."',
+        'Katara: "I can bring water from the river. I am faster at it than Aang."',
+        'Aang: "I can fix the windmill. It is more important for the farmers today."'
+      ],
+      glossary: [{ en: 'well', kk: 'құдық' }, { en: 'windmill', kk: 'жел диірмені' }, { en: 'farmers', kk: 'диқандар' }]
+    },
+    tasks: [
+      C('Кім жолдағы ауыр тасты, ал кім су әкелуі керек?', ['Тас — Тоф, су — Катара', 'Тас — Сокка, су — Аанг', 'Тас — Катара, су — Тоф'], 0,
+        'Sokka: «Toph is stronger than me» — тасты Тоф. Katara: «I am faster at it than Aang» — суды Катара.',
+        { proof: [0, 1, 2], outcomes: ['Тоф тасты алып тастады, Катара құдықты толтырды.', 'Сокканың өзі айтты: Toph is stronger than me.', 'Катара — су әкелуде жылдамырақ, Тоф — күштірек.'] }),
+      C('Аангқа есеп: қай сөйлем дұрыс?', ['Katara is faster with water than Aang.', 'Aang is faster with water than Katara.', 'Sokka is stronger than Toph.'], 0,
+        'Катара өзі туралы: «I am faster at it than Aang» — үшінші жақта: Katara is faster … than Aang.')
+    ]
+  });
+
+  fan('s2-grammar-2', 'v-science-bh6', {
+    franchise: 'big-hero-6', characters: ['baymax', 'hiro'],
+    task: 'Баймакстың өлшемдерін салыстырып, Хироның жағдайы туралы қорытынды жасау',
+    interests: ['science'], mode: 'observe', role: 'Хироның досы', label: 'Big Hero 6: Баймакстың тексеруі',
+    mission: { title: 'Жарысқа бару керек пе?', scene: 'Хиро аздап ауырып қалды. Баймакс температурасын өлшеді. Өлшемдерді салыстырып, Хироға кеңес беріңіз.' },
+    textHeading: 'Баймакстың өлшемдерін оқыңыз',
+    themeWords: [FEA.word('temperature', 'температура, дене қызуы', '🌡️')],
+    text: {
+      title: 'Baymax\'s scan',
+      lines: [
+        'Baymax: "Hiro, your temperature is 37.9. Normal is 36.6."',
+        'Baymax: "Yesterday it was 38.5."',
+        'Hiro: "So I feel better than yesterday. Can I go to the robot contest today?"',
+        'Baymax: "Rest is more important than the contest today."'
+      ],
+      glossary: [{ en: 'normal', kk: 'қалыпты' }, { en: 'contest', kk: 'жарыс, байқау' }, { en: 'rest', kk: 'демалыс' }]
+    },
+    tasks: [
+      C('Хироның жағдайы туралы қай қорытынды дұрыс?', ['Кешегіден жақсырақ, бірақ әлі қалыпты емес', 'Кешегіден нашарырақ, сондықтан демалу керек', 'Қалыпты, сондықтан жарысқа баруға болады'], 0,
+        '37.9 — кешегі 38.5-тен төмен, бірақ қалыпты 36.6-дан жоғары.',
+        { proof: [0, 1], outcomes: ['Хиро бүгін демалып, жарысқа ертең барды.', '37.9 кешегі 38.5-тен төмен — жақсырақ.', '37.9 қалыпты 36.6-дан жоғары — әлі қалыпты емес.'] }),
+      C('Баймакстың қорытындысын қай сөйлем дұрыс береді?', ['Hiro\'s temperature is lower than yesterday, but higher than normal.', 'Hiro\'s temperature is higher than yesterday and lower than normal.', 'Hiro\'s temperature is more low than yesterday.'], 0,
+        'low → lower, high → higher; «more low» деп айтпаймыз.', { proof: [0, 1] })
+    ]
+  });
+
+  // s1-grammar-2: There is / There are
+  fan('s1-grammar-2', 'v-investigate-toys', {
+    franchise: 'toy-story', characters: ['woody', 'buzz', 'jessie'],
+    task: 'ойыншықтардың есебін оқып, жоғалған доптың қайда екенін анықтау',
+    interests: ['investigate'], mode: 'deduce', role: 'Вуди командасының мүшесі', label: 'Toy Story: доп қайда?',
+    mission: { title: 'Жоғалған қызыл доп', scene: 'Бөлмеде қызыл доп жоғалды. Вуди, Базз және Джесси бөлмені тексеріп, не бар екенін айтты. Доптың қайда болуы мүмкін екенін табыңыз.' },
+    textHeading: 'Ойыншықтардың есебін оқыңыз',
+    themeWords: [FEA.word('ball', 'доп', '🔴')],
+    text: {
+      title: 'Where is the red ball?',
+      lines: [
+        'Woody: "The red ball is missing. Let\'s check the room."',
+        'Buzz: "Under the bed there are two shoes and a box."',
+        'Jessie: "In the box there are three books. They are square."',
+        'Woody: "Behind the door there is a bag. Something round is in it!"'
+      ],
+      glossary: [{ en: 'under', kk: 'астында' }, { en: 'square', kk: 'төртбұрышты' }, { en: 'round', kk: 'дөңгелек' }]
+    },
+    tasks: [
+      C('Қызыл доп қай жерде болуы мүмкін?', ['Есіктің артындағы сөмкеде', 'Төсектің астындағы қорапта', 'Төсектің астындағы аяқкиімде'], 0,
+        'Қорапта — үш кітап (square). Есіктің артындағы сөмкеде — «something round». Доп дөңгелек.',
+        { proof: [2, 3], outcomes: ['Вуди сөмкені ашты — қызыл доп сонда екен!', 'Қорапта тек үш төртбұрышты кітап бар.', 'Төсектің астында екі аяқкиім ғана бар.'] }),
+      C('Баззға есеп жазыңыз. Қай сөйлем дұрыс?', ['There are two shoes and a box under the bed.', 'There is two shoes and a box under the bed.', 'There are two shoe and a box under the bed.'], 0,
+        'two shoes — бірнеше зат: There are, shoe сөзіне -s қосылады.')
+    ]
+  });
+
+  // s1-grammar: he / she + -s (действия даны в таблице в начальной форме)
+  fan('s1-grammar', 'v-humor-sb', {
+    franchise: 'spongebob', characters: ['sandy', 'spongebob', 'patrick'],
+    task: 'Сэндидің кестесін оқып, кім көмектесе алатынын шешу',
+    interests: ['humor'], mode: 'plan', role: 'Сэндидің көмекшісі', label: 'SpongeBob: кім бос?',
+    mission: { title: 'Сэндиге көмек', scene: 'Сэндиге таңғы 10-да тор жөндеуге көмек керек. Оның дәптерінде достарының кестесі бар. Кім бос екенін анықтаңыз.' },
+    textHeading: 'Сэндидің дәптерін оқыңыз',
+    themeWords: [FEA.word('net', 'тор', '🥅')],
+    text: {
+      title: 'Sandy\'s notebook',
+      lines: [
+        'SpongeBob: work at the Krusty Krab — every day, 9 am – 5 pm',
+        'Patrick: sleep under his rock — every afternoon',
+        'Sandy: do science — every evening',
+        'Sandy needs help with a jellyfish net at 10 am.'
+      ],
+      glossary: [{ en: 'rock', kk: 'тас' }, { en: 'jellyfish net', kk: 'медуза торы' }, { en: 'afternoon', kk: 'түстен кейін' }]
+    },
+    tasks: [
+      C('Таңғы 10-да Сэндиге кім көмектесе алады?', ['Патрик: ол тек түстен кейін ұйықтайды', 'Губка Боб: ол таңертең үйде, жұмыста емес', 'Екеуі де: таңертең екеуінің де уақыты бар'], 0,
+        'SpongeBob — жұмыста 9 am – 5 pm (10-да бос емес). Patrick ұйықтайды every afternoon — таңертең бос.',
+        { proof: [0, 1, 3], outcomes: ['Патрик Сэндиге торды жөндеуге көмектесті.', '10-да Губка Боб жұмыста: 9 am – 5 pm.', 'Губка Боб 10-да жұмыста, сондықтан екеуі емес.'] }),
+      T('Сэндидің жазбасын аяқтаңыз:', ['works'],
+        'SpongeBob = he, сондықтан work + s → works.', { sentence: 'SpongeBob ___ at the Krusty Krab every day.' })
     ]
   });
 

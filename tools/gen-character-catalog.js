@@ -16,7 +16,8 @@ md+='| Персонаж | Мир / произведение | Жанр | Уче�
 F.characters.forEach(c=>{const w=W[c.world];const st=active.has(c.id)?'**активен**: '+E.characterLessons(c.id).map(x=>x.lesson.id).join(', '):'сюжет позже';
 md+=`| ${c.name} | ${w.title} | ${G[w.genre]} | ${action[w.genre]} | ${w.age}; ${w.ageNote} | ${w.source?'['+(w.source.split('/')[2])+']('+w.source+')':'—'} | ${st} |\n`;});
 md+='\n## Не включены\n\n| Кто | Причина |\n|---|---|\n'+F.characterExcluded.map(x=>`| ${x[0]} | ${x[1]} |`).join('\n')+'\n';
-md+='\n## Активные связи «персонаж → урок»\n\n| Урок (цель) | Вариант | Персонажи и их функция | Что читает ученик | Решение | Доказательство |\n|---|---|---|---|---|---|\n';
+md+='\n## Активные связи «персонаж → урок»\n\nПравила (проверяет валидатор): персонаж есть в английском материале; у главного решения proof — минимум 2 строки, которые нужно сопоставить; вписываемый ответ и верный английский вариант не стоят в тексте дословно.\n\n| Урок (цель) | Вариант | Персонажи | Материал (слов) | Решение | Строки для доказательства | Объяснение |\n|---|---|---|---|---|---|---|\n';
 F.lessons.slice().sort((a,b)=>a.stage-b.stage||a.id.localeCompare(b.id)).forEach(l=>Object.entries(l.contexts).forEach(([k,c])=>{if(!c.characters)return;
-md+=`| ${l.id}: ${l.goal} | ${k} | ${c.characters.map(id=>E.characterMeta(id).name).join(', ')} | «${c.text.title}» (${c.text.lines.length} строк) | ${c.tasks.map(t=>t.prompt).join(' / ')} | ${c.tasks.map(t=>t.explain).join(' / ')} |\n`;}));
+const wc=c.text.lines.join(' ').split(/\s+/).length;const pr=(c.tasks[0].proof||[]).map(n=>'«'+c.text.lines[n]+'»').join('<br>');
+md+=`| ${l.id}: ${l.goal} | ${k} | ${c.characters.map(id=>E.characterMeta(id).name).join(', ')} | «${c.text.title}» (${c.text.lines.length} строк, ${wc} слов) | ${c.tasks.map(t=>t.prompt).join(' / ')} | ${pr} | ${c.tasks.map(t=>t.explain).join(' / ')} |\n`;}));
 fs.mkdirSync(root+'/docs',{recursive:true});fs.writeFileSync(root+'/docs/character-catalog.md',md);console.log('ok',md.length);

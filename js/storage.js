@@ -85,6 +85,7 @@ FEA.storage = (function () {
     if (p.interests !== null && p.interests !== undefined && !Array.isArray(p.interests)) return '«' + p.name + '» — қызығушылықтар тізімі қате';
     if (p.vocab !== undefined && !isObj(p.vocab)) return '«' + p.name + '» — сөздік деректері қате';
     if (p.taskLevel !== undefined && !isObj(p.taskLevel)) return '«' + p.name + '» — тапсырма түрі деректері қате';
+    if (p.favorites !== undefined && !Array.isArray(p.favorites)) return '«' + p.name + '» — сүйікті кейіпкерлер тізімі қате';
     return null;
   }
 

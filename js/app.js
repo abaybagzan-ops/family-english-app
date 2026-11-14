@@ -20,6 +20,8 @@
   function interestsSummary(p) {
     var list = E.profileInterests(p);
     if (list === null) return null;
+    var fav = E.profileFavorites(p).map(function (id) { return E.characterMeta(id).name; });
+    if (fav.length) return (list.length ? list.map(function (it) { return it.id === 'custom' ? 'Өз тақырыбым' : E.directionMeta(it.id).title; }).join(', ') + ' · ' : '') + 'кейіпкерлер: ' + fav.join(', ');
     if (!list.length) return 'Қызығушылық таңдалмаған — жалпы нұсқалар';
     return list.map(function (it) {
       if (it.id === 'custom') return 'Өз тақырыбым' + (it.custom ? ' «' + it.custom + '»' : '');
@@ -597,6 +599,8 @@
     var counter = h('p', { class: 'interest-counter', role: 'status' });
     var details = h('div', { class: 'interest-details' });
     var save = h('button', { class: 'btn btn-primary btn-block' }, editing ? 'Сақтау' : 'Жалғастыру');
+    var favs = E.profileFavorites(p).slice();
+    var favPanel = favoritesPanel();
 
     function find(id) { return sel.filter(function (x) { return x.id === id; })[0]; }
     function meta(id) { return E.directionMeta(id); }
@@ -612,7 +616,7 @@
         no.textContent = on ? String(sel.indexOf(find(id)) + 1) : '';
       });
       counter.textContent = msg || (sel.length ? 'Таңдалды: ' + sel.length + (sel.length < max ? ' · тағы қосуға болады (міндетті емес)' : '') : 'Біреуін таңдаңыз');
-      save.disabled = !sel.length;
+      save.disabled = !sel.length && !favs.length;
       drawDetails();
     }
 
@@ -709,14 +713,96 @@
       return c;
     }
 
+    /*
+     * Любимые персонажи: поиск по имени и миру; активные (есть готовый урок) можно выбрать,
+     * остальные видны как «сюжет кейін». Длинной стены карточек нет: по умолчанию — только
+     * миры с готовыми уроками, полный каталог свёрнут.
+     */
+    function favoritesPanel() {
+      var worldsById = {};
+      FEA.characterWorlds.forEach(function (w) { worldsById[w.id] = w; });
+      var active = {};
+      E.activeCharacters().forEach(function (c) { active[c.id] = 1; });
+      var q = '';
+      var input = h('input', { class: 'text-input search-input', type: 'search', placeholder: 'Кейіпкер немесе шығарма атауы', 'aria-label': 'Кейіпкерді іздеу', autocomplete: 'off', spellcheck: 'false' });
+      var counter2 = h('p', { class: 'fav-counter', role: 'status' });
+      var chosen = h('div', { class: 'fav-chosen' });
+      var results = h('div', { class: 'fav-results' });
+      function chip(c) {
+        var on = favs.indexOf(c.id) !== -1;
+        if (!active[c.id]) return h('span', { class: 'fav-chip later', title: 'Сюжет кейін қосылады' }, c.name, h('span', { class: 'later-mark' }, ' · сюжет кейін'));
+        return h('button', { class: 'fav-chip' + (on ? ' active' : ''), 'aria-pressed': on ? 'true' : 'false', onclick: function () {
+          var i = favs.indexOf(c.id);
+          if (i !== -1) favs.splice(i, 1);
+          else if (favs.length >= FEA.maxFavorites) { counter2.textContent = 'Ең көбі ' + FEA.maxFavorites + ' кейіпкер.'; return; }
+          else favs.push(c.id);
+          draw(); sync();
+        } }, on ? icon('check') : null, c.name);
+      }
+      function worldBlock(w, list) {
+        var lessons = {};
+        list.forEach(function (c) { E.characterLessons(c.id).forEach(function (x) { lessons[x.lesson.id] = 1; }); });
+        var n = Object.keys(lessons).length;
+        return h('div', { class: 'fav-world' },
+          h('p', { class: 'fav-world-head' }, h('span', { class: 'fav-world-title' }, w.title), n ? h('span', { class: 'fav-world-n' }, n + ' сабақ') : h('span', { class: 'fav-world-n muted' }, 'сюжет кейін')),
+          h('div', { class: 'fav-chips' }, list.map(chip)));
+      }
+      function byWorld(list) {
+        var order = [], map = {};
+        list.forEach(function (c) { if (!map[c.world]) { map[c.world] = []; order.push(c.world); } map[c.world].push(c); });
+        return order.map(function (id) { return worldBlock(worldsById[id], map[id]); });
+      }
+      function draw() {
+        results.innerHTML = '';
+        var nq = q.trim().toLowerCase();
+        if (nq) {
+          var hits = FEA.characters.filter(function (c) { return c.name.toLowerCase().indexOf(nq) !== -1 || worldsById[c.world].title.toLowerCase().indexOf(nq) !== -1; });
+          if (!hits.length) results.appendChild(h('p', { class: 'muted small' }, 'Каталогта табылмады. Өз кейіпкеріңізді төмендегі «Өз тақырыбым» арқылы жазуға болады.'));
+          byWorld(hits).forEach(function (b) { results.appendChild(b); });
+        } else {
+          var act = FEA.characters.filter(function (c) { return active[c.id]; });
+          byWorld(act).forEach(function (b) { results.appendChild(b); });
+          var rest = FEA.characters.filter(function (c) { return !active[c.id]; });
+          var restWorlds = {};
+          rest.forEach(function (c) { restWorlds[c.world] = 1; });
+          var more = h('details', { class: 'fav-more' },
+            h('summary', null, 'Толық каталог: тағы ' + rest.length + ' кейіпкер, ' + Object.keys(restWorlds).length + ' әлем — сюжеттері кейін'),
+            FEA.characterGenres.map(function (g) {
+              var gl = rest.filter(function (c) { return worldsById[c.world].genre === g.id; });
+              return gl.length ? h('div', { class: 'fav-genre' }, h('p', { class: 'fav-genre-title' }, g.title), byWorld(gl)) : null;
+            }));
+          results.appendChild(more);
+        }
+        chosen.innerHTML = '';
+        counter2.textContent = favs.length ? 'Таңдалды: ' + favs.length + ' / ' + FEA.maxFavorites : 'Әзірге таңдалмаған';
+        if (favs.length) {
+          var ls = {};
+          favs.forEach(function (id) { E.characterLessons(id).forEach(function (x) { (ls[x.lesson.id] = ls[x.lesson.id] || { l: x.lesson, who: [] }).who.push(E.characterMeta(id).name); }); });
+          chosen.appendChild(h('p', { class: 'fav-lessons-head' }, 'Осы кейіпкерлермен дайын сабақтар:'));
+          chosen.appendChild(h('ul', { class: 'fav-lessons' }, Object.keys(ls).map(function (k) {
+            return h('li', null, h('strong', null, '«' + ls[k].l.title + '»'), ' — ' + ls[k].who.join(', '));
+          })));
+        }
+      }
+      input.addEventListener('input', function () { q = input.value; draw(); });
+      draw();
+      return h('section', { class: 'fav-panel', 'aria-label': 'Сүйікті кейіпкерлер' },
+        h('h2', { class: 'group-title' }, 'Сүйікті кейіпкерлер (міндетті емес)'),
+        h('p', { class: 'muted small' }, 'Тек дайын сабағы бар кейіпкерлерді таңдауға болады. Сабақтағы жағдайлар — оқуға арналған жаңа мәтіндер, кітаптағы немесе фильмдегі сахналар емес.'),
+        h('label', { class: 'search' }, icon('search', 'search-ico'), input),
+        counter2, chosen, results);
+    }
+
     save.addEventListener('click', function () {
-      if (!sel.length) return;
+      if (!sel.length && !favs.length) return;
+      p.favorites = favs.slice();
       p.interests = sel.map(function (x) { return E.cleanInterest(x); }).filter(Boolean);
       persist();
       go(editing ? 'progress' : startRoute());
     });
     var skip = h('button', { class: 'btn btn-ghost btn-block', onclick: function () {
       p.interests = [];
+      if (Array.isArray(p.favorites)) p.favorites = [];
       persist();
       go(editing ? 'progress' : startRoute());
     } }, 'Әзірге таңдамаймын');
@@ -737,6 +823,7 @@
         h('h1', null, 'Сізге не ұнайды?'),
         h('p', { class: 'lead' }, 'Біреуін таңдаңыз. Кей сабақтарда сіз осы бағыттағы рөлді аласыз.'),
         h('p', { class: 'muted small' }, 'Деңгей мен сабақтар реті өзгермейді. Кейін «Прогресс» бетінде ауыстыруға болады.'),
+        favPanel,
         groups,
         h('div', { class: 'interest-footer' }, counter, details, save, skip,
           editing ? h('button', { class: 'btn btn-ghost btn-block', onclick: function () { go('progress'); } }, 'Артқа') : null))
@@ -999,7 +1086,8 @@
     var v = variantInfo(lesson, ctxKey);
     if (variantKind(v) !== 'mission' || !v.ctx.task) return null;
     var task = v.ctx.task.charAt(0).toUpperCase() + v.ctx.task.slice(1);
-    var who = v.interest ? (v.interest.id === 'custom' ? 'Сіз таңдаған әрекет' : E.directionMeta(v.interest.id).title + ' ұнайды') : 'Таңдалған нұсқа';
+    var who = v.interest && v.interest.characters ? v.interest.characters.map(function (id) { return E.characterMeta(id).name; }).join(', ') + ' ұнайды'
+      : v.interest ? (v.interest.id === 'custom' ? 'Сіз таңдаған әрекет' : E.directionMeta(v.interest.id).title + ' ұнайды') : 'Таңдалған нұсқа';
     return h('p', { class: 'chain' }, h('span', { class: 'chain-from' }, who), h('span', { class: 'chain-arrow', 'aria-hidden': 'true' }, ' → '), h('span', null, task + '.'));
   }
 
@@ -1395,6 +1483,7 @@
       h('dl', { class: 'mission-facts' },
         isMission ? h('div', null, h('dt', null, 'Сіздің рөліңіз'), h('dd', null, ctx.role)) : null,
         isMission && ctx.world && E.worldMeta(ctx.world) ? h('div', null, h('dt', null, 'Әлем'), h('dd', null, E.worldMeta(ctx.world).title + ' (ойдан шығарылған)')) : null,
+        isMission && ctx.characters ? h('div', null, h('dt', null, 'Кейіпкерлер'), h('dd', null, ctx.characters.map(function (id) { return E.characterMeta(id).name; }).join(', '))) : null,
         h('div', null, h('dt', null, 'Не істейсіз'), h('dd', null, isMission && ctx.task ? ctx.task.charAt(0).toUpperCase() + ctx.task.slice(1) + '.' : m.scene)),
         m.canDo ? h('div', null, h('dt', null, 'Тіл мақсаты'), h('dd', null, m.canDo)) : null),
       note ? h('p', { class: 'note' }, note) : null,

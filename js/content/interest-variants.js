@@ -624,6 +624,268 @@
   });
 
   // =====================================================================
+  // ПЕРСОНАЖИ ПРОИЗВЕДЕНИЙ (семейная версия, решение владельца проекта).
+  // Новые короткие учебные ситуации: не сцены, не реплики и не сюжеты оригиналов.
+  // characters — кто участвует и делает что-то нужное для решения (валидатор проверяет, что имя есть в тексте).
+  // Такие варианты подбираются только если ученик сам выбрал хотя бы одного из этих персонажей.
+  // [Казахские формулировки не проверены носителем]
+  // =====================================================================
+  function fan(lessonId, key, v) {
+    v.mission.scene += ' (Бұл — оқуға арналған жаңа жағдай, түпнұсқадағы сахна емес.)';
+    variant(lessonId, key, v);
+  }
+
+  // ---- s1-reading — ПРОТОТИП: та же цель «кім / қайда / қашан», два разных мира
+  fan('s1-reading', 'v-investigate-gf', {
+    franchise: 'gravity-falls', characters: ['dipper', 'mabel', 'soos'],
+    task: 'хабарламалардан кім қайда екенін және жоспардың қалай өзгергенін табу',
+    interests: ['investigate'], mode: 'deduce', role: 'Диппер мен Мэйблдің досы', label: 'Gravity Falls: жоспар қалай өзгерді?',
+    mission: { title: 'Ормандағы із', scene: 'Сіз Диппер мен Мэйблдің досысыз. Тоңазытқышта үш қысқа хабарлама тұр. Кім қайда екенін және жоспар қалай өзгергенін табыңыз.' },
+    textHeading: 'Тоңазытқыштағы хабарламаларды оқыңыз',
+    themeWords: [FEA.word('forest', 'орман', '🌲')],
+    text: {
+      title: 'Notes on the fridge',
+      lines: [
+        'Dipper (9:00): "I\'m in the forest. I found a strange footprint. Come at 11:00!"',
+        'Mabel (9:30): "Soos and I are at the lake. We are back at 12:00."',
+        'Soos (10:15): "Sorry, the boat is slow. Mabel and I are back at 13:00, not 12:00."'
+      ],
+      glossary: [{ en: 'footprint', kk: 'із' }, { en: 'lake', kk: 'көл' }, { en: 'back', kk: 'қайтып келу' }]
+    },
+    tasks: [
+      C('Мэйбл мен Соос ақырында сағат нешеде оралады?', ['13:00-де', '12:00-де', '11:00-де'], 0,
+        'Mabel (9:30): «back at 12:00». Бірақ кейінірек Soos (10:15): «back at 13:00, not 12:00». Соңғы хабарлама жоспарды өзгертті.',
+        { outcomes: [
+          'Дұрыс: сіз Мэйбл мен Соосты 13:00-де күттіңіз.',
+          '12:00 — ескі жоспар. Соос 10:15-те оны өзгертті.',
+          '11:00 — Диппердің орманға шақырған уақыты.'
+        ] }),
+      C('Диппер қайда және сағат нешеде күтіп тұр?', ['Орманда, 11:00-де', 'Көлде, 11:00-де', 'Орманда, 12:00-де'], 0,
+        'Dipper (9:00): «I\'m in the forest… Come at 11:00!» — қайда: орманда, қашан: 11:00.')
+    ]
+  });
+
+  fan('s1-reading', 'v-magic-hp', {
+    franchise: 'harry-potter', characters: ['harry', 'hermione', 'ron'],
+    task: 'хабарламалардан кім қашан және қайда келетінін табу',
+    interests: ['magic'], mode: 'plan', role: 'Гермионаның оқу тобының мүшесі', label: 'Harry Potter: кітапханада кездесу',
+    mission: { title: 'Кітапханадағы топ', scene: 'Хогвартс мектебі. Гермиона кітапханада оқу тобын жинады. Гарри мен Рон хабарлама жіберді. Кім қашан және қайда келетінін анықтаңыз.' },
+    textHeading: 'Достардың хабарламаларын оқыңыз',
+    themeWords: [FEA.word('notes', 'жазбалар', '📝')],
+    text: {
+      title: 'Messages at Hogwarts',
+      lines: [
+        'Hermione (Monday): "Study group in the library today at 4 pm. Bring your notes!"',
+        'Ron (3 pm): "Harry, I\'m at the Quidditch pitch. I\'m late for the library."',
+        'Harry (3:30 pm): "Hermione, Ron and I are coming at 4:30, not 4."',
+        'Hermione (3:45 pm): "OK. The library closes at 6 pm."'
+      ],
+      glossary: [{ en: 'study group', kk: 'оқу тобы' }, { en: 'pitch', kk: 'алаң' }, { en: 'closes', kk: 'жабылады' }]
+    },
+    tasks: [
+      C('Гарри мен Рон кітапханаға сағат нешеде келеді?', ['4:30-да', '4:00-де', '6:00-де'], 0,
+        'Harry (3:30 pm): «Ron and I are coming at 4:30, not 4.» 6:00 — кітапхана жабылатын уақыт.',
+        { outcomes: [
+          'Гермиона 4:30-ға дейін өз тапсырмасын бітірді.',
+          '4:00 — бастапқы жоспар. Гарри оны 3:30-да өзгертті.',
+          '6:00-де кітапхана жабылады — бұл кешігу болар еді.'
+        ] }),
+      C('Рон сағат 3-те қай жерде болды?', ['Квиддич алаңында', 'Кітапхананың ішінде', 'Үлкен залдың ішінде'], 0,
+        'Ron (3 pm): «I\'m at the Quidditch pitch.» — Квиддич алаңында.')
+    ]
+  });
+
+  // ---- s1-reading-2: инструкция (first / then / don't)
+  fan('s1-reading-2', 'v-build-mc', {
+    franchise: 'minecraft', characters: ['steve', 'alex'],
+    task: 'Алекстің нұсқаулығын оқып, Стивтің қатесін табу',
+    interests: ['build'], mode: 'diagnose', role: 'Стив пен Алекстің серігі', label: 'Minecraft: Алекстің нұсқаулығы',
+    mission: { title: 'Түнге дейін баспана', scene: 'Алекс Стивке қысқа нұсқаулық жазды. Стив асығып, қате жасағысы келеді. Нұсқаулық бойынша оны тоқтатыңыз.' },
+    textHeading: 'Алекстің жазбасын оқыңыз',
+    themeWords: [FEA.word('wood', 'ағаш (материал)', '🪵')],
+    text: {
+      title: 'Alex\'s note for Steve',
+      lines: [
+        'First, collect wood from four trees.',
+        'Then make a crafting table.',
+        'Don\'t dig straight down. You can fall into a cave.',
+        'Then build a small shelter before night.'
+      ],
+      glossary: [{ en: 'crafting table', kk: 'шеберхана үстелі' }, { en: 'dig straight down', kk: 'тура төмен қазу' }, { en: 'shelter', kk: 'баспана' }]
+    },
+    tasks: [
+      C('Стив шеберхана үстелін жасағысы келеді, бірақ ағашы жоқ. Не дұрыс емес?', ['Алдымен ағаш жинау керек еді', 'Алдымен баспана салу керек еді', 'Алдымен тура төмен қазу керек еді'], 0,
+        'First, collect wood — бірінші қадам. Шеберхана үстелі — содан кейін (Then make a crafting table).',
+        { outcomes: ['Стив төрт ағаштан ағаш жинап, үстел жасады.', 'Баспана — соңғы қадам, бірінші емес.', 'Тура төмен қазуға тыйым салынған.'] }),
+      C('Стив: «I will dig straight down!» дейді. Алекстің жазбасы бойынша не айтасыз?', ['Don\'t dig straight down.', 'Then dig straight down.', 'First, dig straight down.'], 0,
+        'Don\'t + етістік — тыйым: Don\'t dig straight down. You can fall into a cave.',
+        { outcomes: ['Стив басқа жерден қазуды таңдады.', 'Нұсқаулықта бұл — тыйым, қадам емес.', 'Нұсқаулықтың бірінші қадамы — ағаш жинау.'] })
+    ]
+  });
+
+  fan('s1-reading-2', 'v-science-pkm', {
+    franchise: 'pokemon', characters: ['ash', 'pikachu', 'nurse-joy'],
+    task: 'Джой медбикенің карточкасын оқып, Пикачуға дұрыс күтім жасау',
+    interests: ['science', 'strategy'], mode: 'diagnose', role: 'Эштің досы', label: 'Pokémon: Пикачуға күтім',
+    mission: { title: 'Шаршаған Пикачу', scene: 'Пикачу шаршады. Джой медбике Эшке нұсқаулық карточкасын берді. Эшке не істеу керек, не істеуге болмайтынын айтыңыз.' },
+    textHeading: 'Джой медбикенің карточкасын оқыңыз',
+    themeWords: [FEA.word('tired', 'шаршаған', '😴')],
+    text: {
+      title: 'Nurse Joy\'s card for Ash',
+      lines: [
+        'First, give Pikachu some water.',
+        'Then let Pikachu sleep for one hour.',
+        'Don\'t battle today. Pikachu is tired.',
+        'Then come back to the Pokémon Center at 5 pm.'
+      ],
+      glossary: [{ en: 'let … sleep', kk: 'ұйықтатып қою' }, { en: 'battle', kk: 'жарыс, сайыс' }, { en: 'come back', kk: 'қайтып келу' }]
+    },
+    tasks: [
+      C('Эш Пикачуды бірден ұйықтатқысы келеді. Алдымен не істеу керек?', ['Пикачуға су беру', 'Пикачуды ұйықтату', 'Орталыққа қайту'], 0,
+        'First, give Pikachu some water. Ұйқы — содан кейін (Then let Pikachu sleep).',
+        { outcomes: ['Пикачу су ішіп, тынығуға жатты.', 'Ұйқы — екінші қадам.', 'Орталыққа сағат 5-те қайту керек — бұл соңғы қадам.'] }),
+      C('Досы Эшті бүгін сайысқа шақырды. Эш не деуі керек?', ['Nurse Joy says: don\'t battle today.', 'Nurse Joy says: battle today.', 'Nurse Joy says: battle at 5 pm.'], 0,
+        'Don\'t battle today. Pikachu is tired — бүгін сайысқа шықпа, Пикачу шаршаған.',
+        { outcomes: ['Эш сайысты ертеңге қалдырды.', 'Карточкада керісінше: бүгін сайыс жоқ.', 'Сағат 5-те — орталыққа қайту, сайыс емес.'] })
+    ]
+  });
+
+  // ---- s1-grammar-2: There is / There are
+  fan('s1-grammar-2', 'v-strategy-mario', {
+    franchise: 'mario', characters: ['toad', 'luigi', 'mario'],
+    task: 'Тоадтың есебін оқып, кілттер қай есіктің артында екенін шешу',
+    interests: ['strategy'], mode: 'plan', role: 'Марио мен Луиджидің көмекшісі', label: 'Mario: қай есікті ашу керек?',
+    mission: { title: 'Қамалдағы екі есік', scene: 'Тоад қамалдағы бөлмелерді тексеріп, есеп жазды. Марио мен Луиджиге қай есікті ашу керегін шешіңіз және есепті ағылшынша аяқтаңыз.' },
+    textHeading: 'Тоадтың есебін оқыңыз',
+    themeWords: [FEA.word('key', 'кілт', '🔑')],
+    text: {
+      title: 'Toad\'s report from the castle',
+      lines: [
+        'Toad: "There are two doors in the hall: a red door and a blue door."',
+        '"Behind the red door there is one key, and there are three coins."',
+        '"Behind the blue door there are two keys."',
+        'Luigi: "We need two keys for the tower."',
+        'Mario: "We can open only one door today."'
+      ],
+      glossary: [{ en: 'behind', kk: 'артында' }, { en: 'coins', kk: 'тиындар' }, { en: 'tower', kk: 'мұнара' }]
+    },
+    tasks: [
+      C('Мұнараға екі кілт керек, бірақ бір ғана есік ашуға болады. Қай есікті ашқан дұрыс?', ['Көк есікті: онда екі кілт бар', 'Қызыл есікті: онда екі кілт бар', 'Қызыл есікті: онда үш кілт бар'], 0,
+        'Behind the blue door there are two keys. Қызыл есіктің артында — бір кілт (there is one key) және үш тиын.',
+        { outcomes: ['Марио мен Луиджи екі кілтпен мұнараны ашты.', 'Қызыл есікте бір ғана кілт: there is one key.', 'Үшеу — тиындар (three coins), кілт емес.'] }),
+      C('Тоадтың есебін аяқтаңыз. Қай сөйлем дұрыс?', ['There are three coins behind the red door.', 'There is three coins behind the red door.', 'There are three coin behind the red door.'], 0,
+        'three coins — бірнеше зат: There are, және coin сөзіне -s қосылады.')
+    ]
+  });
+
+  // ---- s2-grammar-2: сравнение (-er / more … than)
+  fan('s2-grammar-2', 'v-strategy-sonic', {
+    franchise: 'sonic', characters: ['tails', 'knuckles', 'sonic'],
+    task: 'Тейлз бен Наклстың сөзін салыстырып, Соникке жол таңдау',
+    interests: ['strategy', 'sport'], mode: 'plan', role: 'Соник командасының штурманы', label: 'Sonic: қай жол жылдамырақ?',
+    mission: { title: 'Бекетке жарыс', scene: 'Тейлз бен Наклс екі жол туралы айтты. Соник үшін ең маңыздысы — жылдамдық. Салыстырып, жол таңдаңыз.' },
+    textHeading: 'Достардың сөзін салыстырыңыз',
+    themeWords: [FEA.word('path', 'соқпақ, жол', '🛤️')],
+    text: {
+      title: 'Two paths to the station',
+      lines: [
+        'Tails: "The mountain path is shorter, but it is slower because of the rocks."',
+        'Knuckles: "The beach path is longer, but it is flatter and faster."',
+        'Sonic: "Today speed is more important than distance."'
+      ],
+      glossary: [{ en: 'rocks', kk: 'тастар' }, { en: 'flatter', kk: 'тегістеу' }, { en: 'distance', kk: 'қашықтық' }]
+    },
+    tasks: [
+      C('Соник қай жолды таңдауы керек?', ['Жағажай жолын: ұзынырақ, бірақ жылдамырақ', 'Тау жолын: қысқарақ, сондықтан жылдамырақ', 'Тау жолын: тегістеу әрі жылдамырақ'], 0,
+        'Knuckles: «The beach path is … faster». Tails: тау жолы shorter, бірақ slower. Соник үшін жылдамдық маңыздырақ.',
+        { outcomes: ['Соник жағажай жолымен бірінші жетті.', 'Тау жолы қысқарақ, бірақ тастарға байланысты баяуырақ.', 'Тегіс — жағажай жолы, тау жолы емес.'] }),
+      T('Тейлзге жауап жазыңыз. Жақшадағы сөзді салыстыру түрінде жазыңыз:', ['faster'],
+        'fast — қысқа сөз: faster.', { sentence: 'The beach path is ___ (fast) than the mountain path.' })
+    ]
+  });
+
+  fan('s2-grammar-2', 'v-heroes-spv', {
+    franchise: 'spider-verse', characters: ['miles', 'gwen'],
+    task: 'Майлз бен Гвеннің сөзін салыстырып, роботты жәрмеңкеге қалай апаруды шешу',
+    interests: ['heroes', 'build'], mode: 'justify', role: 'Майлз бен Гвеннің командасы', label: 'Spider-Verse: роботты қалай апарамыз?',
+    mission: { title: 'Ғылым жәрмеңкесі', scene: 'Майлз бен Гвен ғылым жәрмеңкесіне ауыр робот апарады. Екі нұсқаны салыстырып, шешім қабылдаңыз.' },
+    textHeading: 'Майлз бен Гвеннің әңгімесін оқыңыз',
+    themeWords: [FEA.word('robot', 'робот', '🤖')],
+    text: {
+      title: 'Two ways to the science fair',
+      lines: [
+        'Miles: "The science fair starts at 10:00. Our robot is heavy."',
+        'Gwen: "The subway is cheaper than a taxi, but it is more crowded."',
+        'Miles: "A taxi is more expensive, but it is safer for the robot."',
+        'Gwen: "We have money for a taxi. The robot is more important today."'
+      ],
+      glossary: [{ en: 'science fair', kk: 'ғылым жәрмеңкесі' }, { en: 'crowded', kk: 'адамға толы' }, { en: 'safer', kk: 'қауіпсіздеу' }]
+    },
+    tasks: [
+      C('Олар қалай баруы керек?', ['Таксимен: қымбатырақ, бірақ роботқа қауіпсіздеу', 'Метромен: арзанырақ, сондықтан роботқа жақсырақ', 'Метромен: таксиден бос әрі қауіпсіздеу'], 0,
+        'Miles: «A taxi is … safer for the robot». Gwen: «The robot is more important today». Метро — cheaper, бірақ more crowded.',
+        { outcomes: ['Робот жәрмеңкеге аман жетті.', 'Метро арзанырақ, бірақ адамға толы — роботқа қауіпті.', 'Мәтін бойынша метро бос емес: more crowded.'] }),
+      C('Гвеннің ойын қай сөйлем дұрыс береді?', ['The robot is more important than the money.', 'The robot is importanter than the money.', 'The robot is more importanter than the money.'], 0,
+        'important — ұзын сөз: more important than.')
+    ]
+  });
+
+  // ---- s2-grammar: was / were + -ing … when …
+  fan('s2-grammar', 'v-investigate-sh', {
+    franchise: 'sherlock', characters: ['holmes', 'watson', 'hudson'],
+    task: 'куәлардың «не істеп жатқанын» дерекпен салыстырып, қайшылықты табу',
+    interests: ['investigate', 'history'], mode: 'deduce', role: 'Холмстың көмекшісі', label: 'Sherlock Holmes: скрипка садағы',
+    mission: { title: 'Жоғалған садақ', scene: 'Шерлок Холмстың скрипка садағы кешкі 8-де жоғалды. Үйдегілер сол сәтте не істеп жатқанын айтты. Дерекпен салыстырып, кімнің сөзі шындыққа сай емес екенін табыңыз.' },
+    textHeading: 'Үйдегілердің сөзін оқыңыз',
+    themeWords: [FEA.word('violin', 'скрипка', '🎻')],
+    text: {
+      title: 'The missing violin bow',
+      lines: [
+        'Holmes\'s violin bow disappeared at 8 pm.',
+        'Mrs Hudson: "At 8 pm I was making tea in the kitchen."',
+        'Dr Watson: "At 8 pm I was reading the newspaper by the fire."',
+        'The new cook: "At 8 pm I was buying bread at the market."',
+        'Holmes: "But the market closes at 6 pm."'
+      ],
+      glossary: [{ en: 'bow', kk: 'садақ (скрипка садағы)' }, { en: 'newspaper', kk: 'газет' }, { en: 'cook', kk: 'аспаз' }]
+    },
+    tasks: [
+      C('Кімнің сөзі дерекке қайшы?', ['Жаңа аспаздың', 'Хадсон ханымның', 'Ватсонның'], 0,
+        'The new cook: «At 8 pm I was buying bread at the market». Бірақ Holmes: «the market closes at 6 pm».',
+        { outcomes: ['Аспаз садақты байқаусызда алып қойғанын мойындады.', 'Хадсон ханымның сөзіне дерек қайшы емес.', 'Ватсонның сөзіне дерек қайшы емес.'] }),
+      T('Холмстың жазбасын аяқтаңыз (екі сөз):', ['was reading'],
+        'Сол сәтте созылып жатқан әрекет: was + reading.', { sentence: 'At 8 pm Dr Watson ___ (read) the newspaper.' })
+    ]
+  });
+
+  fan('s2-grammar', 'v-investigate-sd', {
+    franchise: 'scooby-doo', characters: ['fred', 'daphne', 'shaggy', 'scooby', 'velma'],
+    task: 'команданың сөзін Велманың дерегімен салыстырып, жарық неге сөнгенін табу',
+    interests: ['investigate', 'humor'], mode: 'deduce', role: 'Mystery Inc. командасының мүшесі', label: 'Scooby-Doo: жарық неге сөнді?',
+    mission: { title: 'Мұражайдағы қараңғылық', scene: 'Кешкі 9-да мұражайда кенет жарық сөнді. Әркім сол сәтте не істеп жатқанын айтты. Велманың дерегімен салыстырып, жарықтың неге сөнгенін табыңыз.' },
+    textHeading: 'Команданың сөзін оқыңыз',
+    themeWords: [FEA.word('switch', 'ажыратқыш', '💡')],
+    text: {
+      title: 'The lights went out',
+      lines: [
+        'At 9 pm the lights in the museum suddenly went out.',
+        'Fred: "I was checking the back door when it happened."',
+        'Daphne: "I was talking to the guard at the front desk."',
+        'Shaggy: "Scooby and I were eating sandwiches in the café!"',
+        'Velma: "The café is closed today. And there are sandwich crumbs next to the light switch."'
+      ],
+      glossary: [{ en: 'went out', kk: 'сөнді' }, { en: 'crumbs', kk: 'қиқым, үгінді' }, { en: 'switch', kk: 'ажыратқыш' }]
+    },
+    tasks: [
+      C('Велманың дерегі бойынша кімнің сөзі қате?', ['Шэгги мен Скубидің', 'Фред пен Дафнаның', 'Күзетші мен Велманың'], 0,
+        'Shaggy: «we were eating sandwiches in the café». Бірақ Velma: «The café is closed today», ал сэндвич қиқымдары ажыратқыштың жанында.',
+        { outcomes: ['Шэгги күліп мойындады: екеуі ажыратқышқа сүйеніп тұрған екен.', 'Фред пен Дафнаның сөзіне дерек қайшы емес.', 'Велма — дерек тапқан адам, күдікті емес.'] }),
+      T('Велманың қорытындысын аяқтаңыз (екі сөз):', ['were standing'],
+        'Shaggy and Scooby — көпше, сондықтан were + standing.', { sentence: 'Shaggy and Scooby ___ (stand) next to the light switch when the lights went out.' })
+    ]
+  });
+
+  // =====================================================================
   // s2-grammar «was doing ... when ...»: цель — фон (was/were + -ing) и внезапное событие.
   // =====================================================================
   L = 's2-grammar';

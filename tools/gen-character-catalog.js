@@ -1,0 +1,22 @@
+// Генерирует docs/character-catalog.md из js/content/characters.js и вариантов уроков. node tools/gen-character-catalog.js
+const fs=require('fs'),path=require('path'),vm=require('vm');
+const root=path.join(__dirname,'..');
+const html=fs.readFileSync(root+'/index.html','utf8');const files=[];html.replace(/<script src="(js\/[^"]+)"><\/script>/g,(_,f)=>files.push(f));
+const sb={};sb.window=sb;vm.createContext(sb);files.filter(f=>f.startsWith('js/content/')||f==='js/engine.js').forEach(f=>vm.runInContext(fs.readFileSync(path.join(root,f),'utf8'),sb,{filename:f}));
+const F=sb.FEA,E=F.engine;
+const W={};F.characterWorlds.forEach(w=>W[w.id]=w);
+const G={};F.characterGenres.forEach(g=>G[g.id]=g.title);
+const action={mystery:'улики мен куәлардың сөзін салыстыру, қорытынды',magic:'нұсқаулықты орындау, кездесу жоспары',heroes:'көмек қайда керек екенін табу, жоспар таңдау',games:'ресурс, маршрут, нұсқаулық бойынша шешім',animation:'хабарлама/жоспар бойынша шешім',comedy:'оғаш жағдайдағы қателікті табу',books:'хабарламалардан кім/қайда/қашан',folk:'айлалы шешімді түсіну (кейін)',real:'тек тексерілген фактілермен оқу (кейін)'};
+const active=new Set(E.activeCharacters().map(c=>c.id));
+let md='# Каталог персонажей (семейная версия)\n\nСгенерировано из `js/content/characters.js` скриптом проверки. Персонаж **активен**, только если есть готовый вариант урока, где он выполняет функцию в задаче (проверяет `tools/validate-content.js`).\n\n';
+md+='- Популярность среди детей Казахстана этим каталогом не утверждается. Единственный найденный ориентир по Казахстану — сообщение bes.media об анализе библиотечных выдач Минкультуры (самые читаемые — «Гарри Поттер», «Том Сойер»), без процентов и с непроверенной датой.\n';
+md+='- Возраст: источники указаны, где удалось проверить в этой сессии; иначе — «не проверено в этой сессии».\n- Сцены в приложении — новые учебные ситуации, не отрывки и не сцены оригиналов. Реальные люди — без активных сцен в этой версии.\n\n';
+md+=`Итого: ${F.characters.filter(c=>W[c.world].genre!=='real').length} вымышленных персонажей + ${F.characters.filter(c=>W[c.world].genre==='real').length} реальных людей, ${F.characterWorlds.length} миров/групп, активных: ${active.size}.\n\n`;
+md+='| Персонаж | Мир / произведение | Жанр | Учебное действие | Возраст и замечание | Источник | Статус |\n|---|---|---|---|---|---|---|\n';
+F.characters.forEach(c=>{const w=W[c.world];const st=active.has(c.id)?'**активен**: '+E.characterLessons(c.id).map(x=>x.lesson.id).join(', '):'сюжет позже';
+md+=`| ${c.name} | ${w.title} | ${G[w.genre]} | ${action[w.genre]} | ${w.age}; ${w.ageNote} | ${w.source?'['+(w.source.split('/')[2])+']('+w.source+')':'—'} | ${st} |\n`;});
+md+='\n## Не включены\n\n| Кто | Причина |\n|---|---|\n'+F.characterExcluded.map(x=>`| ${x[0]} | ${x[1]} |`).join('\n')+'\n';
+md+='\n## Активные связи «персонаж → урок»\n\n| Урок (цель) | Вариант | Персонажи и их функция | Что читает ученик | Решение | Доказательство |\n|---|---|---|---|---|---|\n';
+F.lessons.slice().sort((a,b)=>a.stage-b.stage||a.id.localeCompare(b.id)).forEach(l=>Object.entries(l.contexts).forEach(([k,c])=>{if(!c.characters)return;
+md+=`| ${l.id}: ${l.goal} | ${k} | ${c.characters.map(id=>E.characterMeta(id).name).join(', ')} | «${c.text.title}» (${c.text.lines.length} строк) | ${c.tasks.map(t=>t.prompt).join(' / ')} | ${c.tasks.map(t=>t.explain).join(' / ')} |\n`;}));
+fs.mkdirSync(root+'/docs',{recursive:true});fs.writeFileSync(root+'/docs/character-catalog.md',md);console.log('ok',md.length);

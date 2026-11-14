@@ -731,3 +731,24 @@ details.stage-group[open] > summary { margin-bottom: var(--s3); }
 .world-option.active .world-title::before { content: "✓ "; color: var(--action); }
 .world-title { font-weight: 700; }
 .world-short { font-size: var(--t-sm); color: var(--ink-2); }
+
+/* любимые персонажи */
+.fav-panel { margin-top: var(--s5); padding: var(--s4); border: 1px solid var(--line); border-radius: 12px; background: var(--sheet); }
+.fav-panel .search { margin-top: var(--s2); }
+.fav-counter { font-size: var(--t-sm); font-weight: 650; color: var(--ink-2); margin: var(--s2) 0; }
+.fav-world { padding: var(--s2) 0; border-top: 1px solid var(--line); }
+.fav-world-head { display: flex; justify-content: space-between; gap: 8px; margin: 0 0 6px; }
+.fav-world-title { font-weight: 700; }
+.fav-world-n { font-size: var(--t-sm); color: var(--action); font-weight: 600; white-space: nowrap; }
+.fav-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.fav-chip { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 6px 12px; border-radius: 999px; border: 1.5px solid var(--line); background: var(--sheet); cursor: pointer; font-weight: 600; color: var(--ink); }
+.fav-chip:hover { border-color: var(--action); }
+.fav-chip.active { background: var(--action); border-color: var(--action); color: var(--on-action); }
+.fav-chip.active .ico { width: 16px; height: 16px; }
+.fav-chip.later { cursor: default; border-style: dashed; color: var(--muted); font-weight: 500; min-height: 36px; }
+.later-mark { font-size: var(--t-xs); }
+.fav-more { margin-top: var(--s3); }
+.fav-more > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; color: var(--action); font-weight: 650; }
+.fav-genre-title { font-size: var(--t-sm); font-weight: 700; color: var(--muted); margin: var(--s3) 0 0; }
+.fav-lessons-head { font-size: var(--t-sm); font-weight: 650; margin: 0 0 4px; }
+.fav-lessons { margin: 0 0 var(--s3); padding-left: 1.1em; font-size: var(--t-sm); }

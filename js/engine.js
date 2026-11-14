@@ -213,6 +213,33 @@ FEA.engine = (function () {
   }
   function worldMeta(id) { return (FEA.worlds || []).filter(function (w) { return w.id === id; })[0] || null; }
 
+  // ---------- Персонажи произведений (каталог js/content/characters.js)
+  var charsById = {};
+  (FEA.characters || []).forEach(function (c) { charsById[c.id] = c; });
+  function characterMeta(id) { return charsById[id] || null; }
+  /* Варианты уроков с персонажем: [{ lesson, key, ctx }]. */
+  function characterLessons(id) {
+    var out = [];
+    FEA.lessons.slice().sort(byOrder).forEach(function (l) {
+      Object.keys(l.contexts).forEach(function (k) {
+        var c = l.contexts[k];
+        if (c.characters && c.characters.indexOf(id) !== -1) out.push({ lesson: l, key: k, ctx: c });
+      });
+    });
+    return out;
+  }
+  /* Активный персонаж — есть хотя бы один готовый вариант урока с ним. */
+  function activeCharacters() { return (FEA.characters || []).filter(function (c) { return characterLessons(c.id).length > 0; }); }
+  /* Любимые персонажи профиля (только активные; старый профиль без поля — пусто). */
+  function profileFavorites(profile) {
+    var f = profile && Array.isArray(profile.favorites) ? profile.favorites : [];
+    var seen = {};
+    return f.filter(function (id) {
+      if (typeof id !== 'string' || seen[id] || !charsById[id] || !characterLessons(id).length) return false;
+      seen[id] = 1; return true;
+    }).slice(0, FEA.maxFavorites || 6);
+  }
+
   function hasInterestChoice(profile) { return profileInterests(profile) !== null; }
 
   /* Предпочитаемые типы действия для направления (по уточнениям). */
@@ -236,8 +263,17 @@ FEA.engine = (function () {
     var list = profileInterests(profile) || [];
     var used = profile && profile.lessons && profile.lessons[lesson.id] ? profile.lessons[lesson.id].contextsUsed || [] : [];
     var best = null;
+    var favs = profileFavorites(profile);
     Object.keys(lesson.contexts).forEach(function (key) {
       var ctx = lesson.contexts[key];
+      // Вариант с персонажами — только если ученик сам выбрал кого-то из них (персонажи не назначаются автоматически)
+      if (ctx.characters) {
+        var hit = ctx.characters.filter(function (id) { return favs.indexOf(id) !== -1; });
+        if (!hit.length) return;
+        var sc = 200 + hit.length * 5 + (used.indexOf(key) === -1 ? 1 : 0);
+        if (!best || sc > best.score) best = { key: key, kind: 'action', score: sc, interest: { id: ctx.interests[0], likes: [], characters: hit } };
+        return;
+      }
       list.forEach(function (it, pos) {
         var weight = FEA.maxDirections - pos;           // 3, 2, 1 — порядок выбора
         var modes = likedModes(it);
@@ -273,7 +309,7 @@ FEA.engine = (function () {
     var out = { action: [], topic: 0 };
     FEA.lessons.slice().sort(byOrder).forEach(function (l) {
       var keys = Object.keys(l.contexts);
-      var act = keys.filter(function (k) { var c = l.contexts[k]; return isActionVariant(c) && c.interests.indexOf(id) !== -1; })
+      var act = keys.filter(function (k) { var c = l.contexts[k]; return isActionVariant(c) && !c.characters && c.interests.indexOf(id) !== -1; })
         .sort(function (a, b) { return (l.contexts[b].interests[0] === id) - (l.contexts[a].interests[0] === id); });
       if (act.length) out.action.push({ lesson: l, key: act[0], ctx: l.contexts[act[0]] });
       else if (d && keys.some(function (k) { return !isActionVariant(l.contexts[k]) && d.topics.indexOf(k) !== -1; })) out.topic++;
@@ -684,6 +720,10 @@ FEA.engine = (function () {
     tierFor: tierFor,
     buildPracticeSteps: buildPracticeSteps,
     directionStats: directionStats,
+    characterMeta: characterMeta,
+    characterLessons: characterLessons,
+    activeCharacters: activeCharacters,
+    profileFavorites: profileFavorites,
     worldsFor: worldsFor,
     worldMeta: worldMeta,
     buildDictionary: buildDictionary,

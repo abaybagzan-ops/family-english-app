@@ -77,7 +77,21 @@ function checkVariant(l, c, ctx, w) {
   if (c.indexOf('v-') !== 0) err(vw + ': ключ варианта должен начинаться с v-');
   if (!Array.isArray(ctx.interests) || !ctx.interests.length) err(vw + ': нет направлений');
   (ctx.interests || []).forEach(function (i) { if (!DIRS[i]) err(vw + ': неизвестное направление ' + i); });
-  if (ctx.interests && c !== 'v-' + ctx.interests[0]) err(vw + ': ключ не совпадает с первым направлением');
+  if (ctx.interests && c !== 'v-' + ctx.interests[0] && !(ctx.franchise && c.indexOf('v-' + ctx.interests[0] + '-') === 0)) err(vw + ': ключ не совпадает с первым направлением');
+  if (ctx.franchise || ctx.characters) {
+    var fw = (FEA.characterWorlds || []).filter(function (x) { return x.id === ctx.franchise; })[0];
+    if (!fw) err(vw + ': неизвестный мир персонажей ' + ctx.franchise);
+    if (!ctx.characters || !ctx.characters.length) err(vw + ': нет персонажей');
+    var body = ctx.text.lines.join(' ') + ' ' + ctx.text.title;
+    (ctx.characters || []).forEach(function (id) {
+      var ch = (FEA.characters || []).filter(function (x) { return x.id === id; })[0];
+      if (!ch) return err(vw + ': нет персонажа ' + id + ' в каталоге');
+      if (ch.world !== ctx.franchise) err(vw + ': ' + id + ' не из мира ' + ctx.franchise);
+      if (fw && fw.genre === 'real') err(vw + ': реальные люди не используются в сценах этой версии');
+      var parts = ch.name.replace(/\(.*\)/, '').split(/[\s-]+/).filter(function (x) { return x.length > 2 && !/^(Dr|Mrs|Princess|Master)\.?$/.test(x); });
+      if (!parts.some(function (x) { return body.indexOf(x) !== -1; })) err(vw + ': персонаж ' + ch.name + ' не участвует в английском материале (камео)');
+    });
+  }
   if (!FEA.actionModes[ctx.mode]) err(vw + ': неизвестный тип действия ' + ctx.mode);
   if (!ctx.role || !ctx.label || !ctx.textHeading || !ctx.task) err(vw + ': нет роли, названия, короткой задачи (task) или заголовка материала');
   if (!ctx.mission || !ctx.mission.title || !ctx.mission.scene) err(vw + ': нет миссии варианта');
@@ -209,6 +223,15 @@ Object.keys(FEA.lessonChallenges || {}).forEach(function (id) {
   if (!DIRS[w.direction]) err('Мир ' + w.id + ': неизвестное направление');
   if (!E.worldsFor(w.direction).some(function (x) { return x.id === w.id; })) err('Мир ' + w.id + ': нет ни одного варианта урока — не показывать в выборе');
 });
+// Каталог персонажей: уникальность, миры, объём, активные
+var chIds = {};
+(FEA.characters || []).forEach(function (c) {
+  if (chIds[c.id]) err('Персонаж: повтор id ' + c.id);
+  chIds[c.id] = 1;
+  if (!(FEA.characterWorlds || []).some(function (w) { return w.id === c.world; })) err('Персонаж ' + c.id + ': неизвестный мир ' + c.world);
+});
+var fictional = (FEA.characters || []).filter(function (c) { var w = FEA.characterWorlds.filter(function (x) { return x.id === c.world; })[0]; return w && w.genre !== 'real'; });
+console.log('Каталог: персонажей ' + fictional.length + ' (+ реальных ' + ((FEA.characters || []).length - fictional.length) + '), миров ' + (FEA.characterWorlds || []).length + ', активных ' + E.activeCharacters().length);
 var dictionary = E.buildDictionary();
 dictionary.forEach(function (e) {
   if (!e.kk.length) err('Словарь: «' + e.en + '» без перевода');

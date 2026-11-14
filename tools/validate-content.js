@@ -163,6 +163,35 @@ FEA.lessons.forEach(function (l) {
   });
 });
 
+// Ступень «Күрделірек»: та же цель, проверенные ключи, без ответа в формулировке и подсказках
+Object.keys(FEA.lessonChallenges || {}).forEach(function (id) {
+  var l = E.getLesson(id), w = 'Вызов ' + id;
+  if (!l) return err(w + ': нет такого урока');
+  var ch = FEA.lessonChallenges[id];
+  if (!ch.note) err(w + ': нет пояснения (note)');
+  var items = E.challengeItems(l);
+  if (!items.length) err(w + ': нет заданий');
+  Object.keys(ch.replaces || {}).forEach(function (k) { if (!l.tasks[k]) err(w + ': заменяет несуществующее задание ' + k); });
+  var seen = {};
+  [l.warmup].concat(l.tasks).forEach(function (t) { if (t.type !== 'match') seen[key(t)] = 1; });
+  items.forEach(function (it, i) {
+    var t = it.task, tw = w + ' задание ' + (i + 1);
+    checkTask(t, tw);
+    if (seen[key(t)]) err(tw + ': повторяет задание базовой ступени');
+    seen[key(t)] = 1;
+    var ans = String(answerText(t) || '').toLowerCase();
+    var visible = (t.prompt + ' ' + (t.sentence || '') + ' ' + (t.text || []).join(' ') + ' ' + (t.sign || []).join(' ')).toLowerCase();
+    if (t.type === 'type' && t.answers.some(function (a) { return visible.indexOf(a.toLowerCase()) !== -1; })) err(tw + ': ответ виден в формулировке или материале');
+    if (t.type === 'type' && /\([a-z ]+\)/i.test(t.sentence || '')) err(tw + ': глагол дан в скобках — это базовая ступень, не вызов');
+    if (!t.hints || t.hints.length < 2) err(tw + ': нужны 2 подсказки (вопрос и правило)');
+    checkHintsNoAnswer(t, t.hints, tw);
+  });
+  Object.keys(l.contexts).forEach(function (c) {
+    var total = E.buildLessonSteps(l, c, { lessons: {}, reviews: {} }, 0, 'challenge').filter(function (s) { return s.phase === 'core' || s.phase === 'context' || s.phase === 'challenge'; }).length;
+    if (total < S.tasksPerLessonMin || total > S.tasksPerLessonMax) err(w + '/' + c + ': заданий ' + total);
+  });
+});
+
 // Короткие формулировки направлений и словарь
 (FEA.directions || []).forEach(function (d) {
   var sh = FEA.directionShort && FEA.directionShort[d.id];

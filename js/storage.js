@@ -84,6 +84,7 @@ FEA.storage = (function () {
     if (p.stages !== null && p.stages !== undefined && !isObj(p.stages)) return '«' + p.name + '» — саты қате';
     if (p.interests !== null && p.interests !== undefined && !Array.isArray(p.interests)) return '«' + p.name + '» — қызығушылықтар тізімі қате';
     if (p.vocab !== undefined && !isObj(p.vocab)) return '«' + p.name + '» — сөздік деректері қате';
+    if (p.taskLevel !== undefined && !isObj(p.taskLevel)) return '«' + p.name + '» — тапсырма түрі деректері қате';
     return null;
   }
 

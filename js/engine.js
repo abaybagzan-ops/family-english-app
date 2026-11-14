@@ -383,7 +383,8 @@ FEA.engine = (function () {
     if (!lesson) return null;
     var ctx = lesson.contexts[p[2]];
     var idx = Number(p[4]);
-    var task = p[3] === 'warmup' ? lesson.warmup : p[3] === 'core' ? lesson.tasks[idx] : (ctx && ctx.tasks[idx]);
+    var task = p[3] === 'warmup' ? lesson.warmup : p[3] === 'core' ? lesson.tasks[idx]
+      : p[3] === 'challenge' ? (challengeItems(lesson)[idx] || {}).task : (ctx && ctx.tasks[idx]);
     if (!task || task.type === 'match') return null;
     return { task: task, text: p[3] === 'context' && ctx ? ctx.text : null, skill: lesson.skill, source: lesson.id };
   }
@@ -464,8 +465,23 @@ FEA.engine = (function () {
    * Шаги: разминка (вспоминание) -> до N повторов -> введение -> основные задания
    * (узнавание -> вспоминание -> применение) -> текст -> задания по тексту.
    */
-  function buildLessonSteps(lesson, ctxKey, profile, now) {
+  /*
+   * Ступень сложности задания: 'base' (по умолчанию) или 'challenge' — только если у урока есть вызов.
+   * Не связана с уровнем языка (ступенью профиля) и с интересом.
+   */
+  function challengeFor(lesson) { return (FEA.lessonChallenges || {})[lesson.id] || null; }
+  function challengeItems(lesson) {
+    var ch = challengeFor(lesson);
+    if (!ch) return [];
+    var items = Object.keys(ch.replaces || {}).sort(function (a, b) { return a - b; }).map(function (k) { return { replaces: Number(k), task: ch.replaces[k] }; });
+    return items.concat((ch.add || []).map(function (t) { return { replaces: null, task: t }; }));
+  }
+  function tierFor(lesson, tier) { return tier === 'challenge' && challengeFor(lesson) ? 'challenge' : 'base'; }
+
+  function buildLessonSteps(lesson, ctxKey, profile, now, tier) {
     var ctx = contextFor(lesson, ctxKey).ctx;
+    tier = tierFor(lesson, tier);
+    var items = tier === 'challenge' ? challengeItems(lesson) : [];
     var own = (lesson.review || []).map(function (r) { return r.id; });
     var steps = [];
     steps.push({ kind: 'mission' });
@@ -478,13 +494,33 @@ FEA.engine = (function () {
     if (lesson.story) steps.push({ kind: 'story', story: lesson.story });
     steps.push({ kind: 'intro' });
     lesson.tasks.forEach(function (t, i) {
-      steps.push({ kind: 'task', phase: 'core', task: t, idx: i, hint: lesson.hints ? lesson.hints[i] : null });
+      var j = -1;
+      items.forEach(function (it, k) { if (it.replaces === i) j = k; });
+      if (j !== -1) steps.push({ kind: 'task', phase: 'challenge', task: items[j].task, idx: j });
+      else steps.push({ kind: 'task', phase: 'core', task: t, idx: i, hint: lesson.hints ? lesson.hints[i] : null });
     });
+    items.forEach(function (it, k) { if (it.replaces === null) steps.push({ kind: 'task', phase: 'challenge', task: it.task, idx: k }); });
     steps.push({ kind: 'text', text: ctx.text });
     ctx.tasks.forEach(function (t, i) {
       steps.push({ kind: 'task', phase: 'context', task: t, text: ctx.text, idx: i });
     });
     return steps;
+  }
+
+  /*
+   * Тренировка пройденного без записи: заранее написанные вопросы повторения из пройденных уроков
+   * (слова и конструкции). Расписание повторения, ошибки и прогресс не меняются.
+   */
+  function buildPracticeSteps(profile, size) {
+    var ids = [];
+    Object.keys(profile.lessons || {}).forEach(function (id) {
+      var l = lessonsById[id];
+      if (l) (l.review || []).forEach(function (r) { ids.push(r.id); });
+    });
+    return shuffle(ids).slice(0, size || 6).map(function (id) {
+      var r = getReview(id);
+      return { kind: 'task', phase: 'practice', task: r.task, text: r.text, practice: true };
+    });
   }
 
   function buildReviewSteps(profile, now) {
@@ -504,8 +540,8 @@ FEA.engine = (function () {
    * Завершение урока. results: [{phase, ok, task, answer, reviewId}]
    * Точность считается только по основным заданиям и заданиям по тексту.
    */
-  function completeLesson(profile, lesson, ctxKey, results, now) {
-    var scored = results.filter(function (r) { return r.phase === 'core' || r.phase === 'context'; });
+  function completeLesson(profile, lesson, ctxKey, results, now, tier) {
+    var scored = results.filter(function (r) { return r.phase === 'core' || r.phase === 'context' || r.phase === 'challenge'; });
     var ok = scored.filter(function (r) { return r.ok; }).length;
     var acc = scored.length ? ok / scored.length : 0;
     var rec = profile.lessons[lesson.id] || { times: 0, bestAccuracy: 0, contextsUsed: [] };
@@ -515,6 +551,9 @@ FEA.engine = (function () {
     rec.lastAccuracy = acc;
     rec.bestAccuracy = Math.max(rec.bestAccuracy || 0, acc);
     if (rec.contextsUsed.indexOf(ctxKey) === -1) rec.contextsUsed.push(ctxKey);
+    // Какая ступень задания была в последний раз (на уровень профиля не влияет)
+    rec.lastTier = tierFor(lesson, tier);
+    if (rec.lastTier === 'challenge') rec.challengeDone = true;
     profile.lessons[lesson.id] = rec;
     (lesson.review || []).forEach(function (r) { scheduleReview(profile, r.id, now); });
     return { correct: ok, total: scored.length, accuracy: acc };
@@ -623,6 +662,10 @@ FEA.engine = (function () {
     directionMeta: directionMeta,
     pickVariant: pickVariant,
     lessonVariants: lessonVariants,
+    challengeFor: challengeFor,
+    challengeItems: challengeItems,
+    tierFor: tierFor,
+    buildPracticeSteps: buildPracticeSteps,
     directionStats: directionStats,
     buildDictionary: buildDictionary,
     variantLabel: variantLabel,

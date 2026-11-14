@@ -939,6 +939,7 @@
       h('div', { class: 'lesson-card-foot' },
         h('div', { class: 'lesson-card-tags' },
           variantBadge(lesson, opts.ctxKey),
+          E.challengeFor(lesson) ? h('span', { class: 'state-tag challenge-tag' }, (p.lessons[lesson.id] && p.lessons[lesson.id].challengeDone) ? icon('check') : null, 'Күрделірек бар') : null,
           done ? h('span', { class: 'state-tag done' }, icon('check'), 'Өтілді') : h('span', { class: 'state-tag' }, icon('clock'), '5–10 мин')),
         h('button', { class: 'btn ' + (opts.big ? 'btn-primary' : 'btn-secondary'), onclick: function () { startLesson(lesson.id, opts.ctxKey); } },
           opts.label || (done ? 'Қайталау' : 'Бастау'))));
@@ -1216,12 +1217,25 @@
   // ------------------------------------------------------------ САБАҚ
   var run = null;
 
-  function startLesson(lessonId, ctxKey) {
+  /*
+   * tier — ступень задания ('base' | 'challenge'). Не задана — берётся последний выбор ученика
+   * для этого урока (profile.taskLevel), иначе базовая. Уровень языка и интерес не меняет.
+   */
+  function startLesson(lessonId, ctxKey, tier) {
     var p = profile();
     var lesson = E.getLesson(lessonId);
     var v = variantInfo(lesson, ctxKey);
-    run = { mode: 'lesson', lesson: lesson, ctxKey: v.key, variant: v,
-      steps: E.buildLessonSteps(lesson, v.key, p, now()), i: 0, results: [], mistakes: [], newReviews: 0 };
+    var t = E.tierFor(lesson, tier || (p.taskLevel && p.taskLevel[lessonId]) || 'base');
+    run = { mode: 'lesson', lesson: lesson, ctxKey: v.key, variant: v, tier: t, pinnedCtx: ctxKey || null,
+      steps: E.buildLessonSteps(lesson, v.key, p, now(), t), i: 0, results: [], mistakes: [], newReviews: 0 };
+    go('lesson');
+  }
+
+  /* Тренировка пройденных слов и конструкций: ничего не записывает. */
+  function startPractice() {
+    var steps = E.buildPracticeSteps(profile(), 6);
+    if (!steps.length) return;
+    run = { mode: 'practice', lesson: null, steps: steps, i: 0, results: [], mistakes: [] };
     go('lesson');
   }
 
@@ -1239,6 +1253,7 @@
     var t = now();
     info = info || { final: ok };
     run.results.push({ phase: step.phase, ok: ok, reviewId: step.reviewId || null });
+    if (run.mode === 'practice') return;   // тренировка: расписание, ошибки и прогресс не меняются
     if (step.reviewId) E.applyReview(p, step.reviewId, ok, t);
     if (!ok && !step.reviewId && run.mode === 'lesson' && step.task.type !== 'match') {
       if (E.scheduleMistake(p, run.lesson.id, run.ctxKey, step.phase, step.idx, t)) run.newReviews++;
@@ -1272,7 +1287,7 @@
     var t = now();
     var summary;
     if (run.mode === 'lesson') {
-      summary = E.completeLesson(p, run.lesson, run.ctxKey, run.results, t);
+      summary = E.completeLesson(p, run.lesson, run.ctxKey, run.results, t, run.tier);
     } else {
       var ok = run.results.filter(function (r) { return r.ok; }).length;
       summary = { correct: ok, total: run.results.length };
@@ -1291,7 +1306,7 @@
   function screenLesson() {
     var step = run.steps[run.i];
     var progress = Math.round((run.i / run.steps.length) * 100);
-    var title = run.mode === 'lesson' ? run.lesson.title : 'Қайталау';
+    var title = run.mode === 'lesson' ? run.lesson.title : run.mode === 'practice' ? 'Өткенді жаттығу' : 'Қайталау';
     var content;
 
     if (step.kind === 'mission') content = missionView(run.lesson, run.ctxKey);
@@ -1307,6 +1322,7 @@
       h('button', { class: 'btn btn-primary btn-block', onclick: nextStep }, 'Сұрақтарға көшу →'));
     else {
       var phaseLabel = { warmup: 'Алдымен еске түсірейік', review: 'Қайталау', core: 'Жаттығу',
+        challenge: 'Күрделірек тапсырма', practice: 'Жаттығу · нәтиже жазылмайды',
         context: run.variant && run.variant.ctx && run.variant.ctx.role ? 'Сіздің шешіміңіз · ' + run.variant.ctx.role : 'Мәтін бойынша' }[step.phase];
       content = h('div', null,
         h('div', { class: 'phase-label' }, phaseLabel),
@@ -1355,6 +1371,7 @@
         h('div', null, h('dt', null, 'Не істейсіз'), h('dd', null, isMission && ctx.task ? ctx.task.charAt(0).toUpperCase() + ctx.task.slice(1) + '.' : m.scene)),
         m.canDo ? h('div', null, h('dt', null, 'Тіл мақсаты'), h('dd', null, m.canDo)) : null),
       note ? h('p', { class: 'note' }, note) : null,
+      tierPicker(lesson),
       h('button', { class: 'btn btn-primary btn-block', onclick: nextStep }, 'Бастау'),
       others.length ? h('details', { class: 'variant-picker' },
         h('summary', null, 'Басқа рөл таңдау'),
@@ -1364,6 +1381,32 @@
             h('span', { class: 'variant-option-title' }, x.action ? x.ctx.role : 'Мәтін: ' + (FEA.contextNames[x.key] || x.key)),
             h('span', { class: 'variant-option-sub' }, x.action ? x.ctx.task : 'тапсырма жалпы'));
         }))) : null);
+  }
+
+  /*
+   * Выбор ступени задания на экране миссии (только у уроков с вызовом, только до начала).
+   * Выбор запоминается для урока в profile.taskLevel; уровень языка и уроки не меняются.
+   */
+  function tierPicker(lesson) {
+    var ch = E.challengeFor(lesson);
+    if (!ch) return null;
+    function opt(t, title, sub) {
+      var on = run.tier === t;
+      return h('button', { class: 'tier-option' + (on ? ' active' : ''), 'aria-pressed': on ? 'true' : 'false', onclick: function () {
+        if (run.tier === t) return;
+        var p = profile();
+        p.taskLevel = p.taskLevel && typeof p.taskLevel === 'object' ? p.taskLevel : {};
+        p.taskLevel[lesson.id] = t;
+        persist();
+        startLesson(lesson.id, run.pinnedCtx || undefined, t);
+      } }, on ? icon('check') : null, h('span', { class: 'tier-title' }, title), h('span', { class: 'tier-sub' }, sub));
+    }
+    return h('div', { class: 'tier' },
+      h('p', { class: 'tier-head' }, 'Тапсырма түрі'),
+      h('div', { class: 'tier-options', role: 'group', 'aria-label': 'Тапсырма түрі' },
+        opt('base', 'Негізгі', 'форма көрсетіледі'),
+        opt('challenge', 'Күрделірек', ch.note)),
+      h('p', { class: 'tier-fine' }, 'Тіл мақсаты бірдей. Деңгейіңіз бен прогресіңіз өзгермейді.'));
   }
 
   /*
@@ -1673,7 +1716,8 @@
     return page([
       h('section', { class: 'card card-pad result' },
         h('div', { class: 'result-icon', 'aria-hidden': 'true' }, icon('check')),
-        h('h1', null, isLesson ? 'Миссия орындалды!' : 'Қайталау аяқталды!'),
+        h('h1', null, isLesson ? 'Миссия орындалды!' : r.mode === 'practice' ? 'Жаттығу аяқталды!' : 'Қайталау аяқталды!'),
+        r.mode === 'practice' ? h('p', { class: 'muted small' }, 'Жаттығу нәтижесі сақталмайды: қайталау кестесі мен прогресс өзгермеді.') : null,
         isLesson ? h('p', { class: 'muted' }, '«' + r.lesson.title + '» — ', h('strong', null, 'өтілді деп белгіленді.')) : null,
         isLesson && r.lesson.canDo ? h('div', { class: 'goal can-do' }, h('span', { class: 'goal-label' }, 'Енді сіз:'), h('p', null, r.lesson.canDo)) : null,
         h('p', { class: 'result-score' }, 'Бірінші әрекеттен дұрыс: ', h('strong', null, s.correct + ' / ' + s.total)),
@@ -1722,6 +1766,7 @@
         h('div', null, h('dt', null, 'Шешілген іс'), h('dd', null, String(solvedCases)))),
 
       due ? h('button', { class: 'btn btn-secondary btn-block', onclick: function () { startReview(); } }, icon('review'), 'Қазір қайталау · ' + due + ' сұрақ') : null,
+      completed.length ? h('button', { class: 'btn btn-ghost btn-block', onclick: startPractice }, 'Өткен сөздер мен ережелерді жаттығу') : null,
       canDoSection(p),
       h('section', { class: 'card card-pad' },
         h('h2', null, 'Дағдылар бойынша саты'),
